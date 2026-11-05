@@ -1,7 +1,11 @@
 name: 배포
 
-# 사람이 Actions 화면에서 버튼을 눌렀을 때만 돈다. 쓰기 권한이 있는 사람만 누를 수 있다.
+# main에 합치면 자동으로 배포한다. 문서만 바꾼 커밋은 건너뛴다.
+# 되돌리기와 재배포는 Actions 화면의 버튼으로 한다. 쓰기 권한이 있는 사람만 누를 수 있다.
 on:
+  push:
+    branches: [main]
+    paths-ignore: ['**.md']
   workflow_dispatch:
     inputs:
       action:
@@ -10,7 +14,7 @@ on:
         options: [deploy, rollback]
         default: deploy
 
-# 여러 명이 눌러도 하나씩 차례로 돈다. 진행 중인 배포를 끊지 않는다.
+# 여러 PR이 합쳐져도 하나씩 차례로 돈다. 진행 중인 배포를 끊지 않고, 기다리는 배포는 가장 최근 것만 남는다.
 concurrency:
   group: production
   cancel-in-progress: false
@@ -23,13 +27,29 @@ jobs:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    # 서버 접속 비밀값은 main에서만 꺼낼 수 있도록 이 환경에 둔다.
+    environment: production
     env:
-      ACTION: ${{ inputs.action }}
+      ACTION: ${{ inputs.action || 'deploy' }}
       DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        if: env.ACTION == 'deploy'
+        with:
+          node-version: 22
+          cache: npm
+
+      # PR을 검사한 뒤 main이 달라졌을 수 있으니 합쳐진 코드를 다시 검사한다.
+      - name: 합쳐진 코드 검사
+        if: env.ACTION == 'deploy'
+        run: |
+          npm ci
+          npx tsc -b
+          npx vite build
 
       - name: 서버 접속 준비
         env:

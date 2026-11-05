@@ -65,4 +65,7 @@ if [ -n "$active" ]; then
   echo "== 이전 버전($active)을 끕니다"
   compose stop "world-$active"
 fi
+# 배포가 잦아도 디스크가 차지 않게 이름이 없어진 이미지와 오래된 빌드 캐시를 지운다. 되돌리기용 이미지는 남는다.
+docker image prune -f >/dev/null || true
+docker builder prune -f --filter until=168h >/dev/null || true
 echo "== 완료: 지금 $next 가 서비스 중입니다"
