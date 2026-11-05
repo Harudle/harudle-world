@@ -145,3 +145,51 @@ body {
     animation: none;
   }
 }
+
+/* 하루들 휴대폰. 넓은 화면에서는 폰 모양 테두리 안에, 휴대폰에서는 화면 가득 띄운다. */
+.harudle-phone-dialog {
+  margin: auto;
+  width: min(410px, calc(100% - 2rem));
+  height: min(860px, calc(100dvh - 2rem));
+  max-width: none;
+  max-height: none;
+  padding: 8px 10px 12px;
+  overflow: hidden;
+  background: var(--color-ink);
+  border: 3px solid var(--color-ink);
+  border-radius: 36px;
+  box-shadow: 10px 10px 0 var(--color-haru-600);
+}
+
+.harudle-phone-dialog::backdrop {
+  background: rgb(43 33 64 / 0.45);
+  backdrop-filter: blur(3px);
+}
+
+.harudle-phone-dialog[open] {
+  animation: phone-rise 360ms cubic-bezier(0.2, 0.85, 0.3, 1.05);
+}
+
+@keyframes phone-rise {
+  from {
+    opacity: 0;
+    transform: translateY(40px) scale(0.92);
+  }
+}
+
+@media (max-width: 480px) {
+  .harudle-phone-dialog {
+    width: 100%;
+    height: 100dvh;
+    padding: calc(env(safe-area-inset-top) + 6px) 6px calc(env(safe-area-inset-bottom) + 6px);
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .harudle-phone-dialog[open] {
+    animation: none;
+  }
+}

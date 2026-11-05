@@ -102,6 +102,10 @@ export const TREES: { x: number; z: number; scale: number }[] = [
 export const BOOTH_POSITION: [number, number, number] = [-6.6, 0, -2.5]
 export const BOOTH_ROTATION_Y = 0.55
 
+/** 하루들을 직접 써 볼 수 있는 큰 휴대폰. 부스와 마주 보도록 카펫 오른쪽에 비스듬히 세운다. */
+export const PHONE_POSITION: [number, number, number] = [6.4, 0, -2]
+export const PHONE_ROTATION_Y = -0.5
+
 export const MAIN_SPACE: SpaceBounds = {
   halfX: MAIN_HALF_X,
   halfZ: MAIN_HALF_Z,
@@ -109,6 +113,7 @@ export const MAIN_SPACE: SpaceBounds = {
     ...BENCHES.map((bench) => ({ x: bench.x, z: bench.z, radius: 1.3 })),
     ...TREES.map((tree) => ({ x: tree.x, z: tree.z, radius: 0.6 })),
     { x: BOOTH_POSITION[0], z: BOOTH_POSITION[2], radius: 2.7 },
+    { x: PHONE_POSITION[0], z: PHONE_POSITION[2], radius: 1.4 },
   ],
   seats: benchSeats(BENCHES),
 }

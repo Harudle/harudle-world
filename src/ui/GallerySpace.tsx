@@ -24,6 +24,7 @@ import { ControlsGuide, useControlsGuide } from './ControlsGuide'
 import { useDoorPrompt } from './DoorPrompt'
 import { CheerBoardModal } from './CheerBoardModal'
 import { GalleryHud } from './GalleryHud'
+import { HarudlePhoneModal } from './HarudlePhoneModal'
 import { PaintingGame } from './PaintingGame'
 import { TouchJoystick } from './TouchJoystick'
 import { useVisitor } from './useVisitor'
@@ -49,6 +50,7 @@ export function GallerySpace({ onExit }: { onExit: () => void }) {
   const guide = useControlsGuide()
   const [cheersOpen, setCheersOpen] = useState(false)
   const [boothOpen, setBoothOpen] = useState(false)
+  const [phoneOpen, setPhoneOpen] = useState(false)
   const [paintingStage, setPaintingStage] = useState<PaintingStage>('idle')
   const [nearPainting, setNearPainting] = useState(false)
 
@@ -183,7 +185,7 @@ export function GallerySpace({ onExit }: { onExit: () => void }) {
           showWaitingFrames={status !== 'ready'}
           overview={overview}
           jump={jump}
-          paused={Boolean(selected) || customizing || cheersOpen || boothOpen || doorPromptOpen || paintingStage !== 'idle'}
+          paused={Boolean(selected) || customizing || cheersOpen || boothOpen || phoneOpen || doorPromptOpen || paintingStage !== 'idle'}
           onSelect={select}
           onDoor={requestDoor}
           joystick={joystick}
@@ -191,6 +193,7 @@ export function GallerySpace({ onExit }: { onExit: () => void }) {
           cheerCount={cheers.total}
           onOpenCheers={() => setCheersOpen(true)}
           onOpenBooth={() => setBoothOpen(true)}
+          onOpenPhone={() => setPhoneOpen(true)}
           portalSlot={paintingSlot}
           diving={paintingStage === 'diving'}
           suspended={paintingStage === 'inside'}
@@ -212,6 +215,7 @@ export function GallerySpace({ onExit }: { onExit: () => void }) {
         cheerCount={cheers.total}
         onOpenCheers={() => setCheersOpen(true)}
         onOpenBooth={() => setBoothOpen(true)}
+        onOpenPhone={() => setPhoneOpen(true)}
         onCustomize={() => setCustomizing(true)}
         onOpenGuide={guide.show}
         onOverviewChange={setOverview}
@@ -237,9 +241,10 @@ export function GallerySpace({ onExit }: { onExit: () => void }) {
       <TouchJoystick input={joystick} onUse={guide.dismissHint} />
       <ActionButtons controls={joystick} throwRequest={play.throwRequest} hitNotice={hitNotice} />
       <ChatPanel chat={chat} />
-      <ControlsGuide guide={guide} tip="액자를 누르면 크게 보고, 벤치에 앉을 수 있어요. 문으로 걸어가면 작가 전시실에 들어가요. 빛나는 그림 앞에서 점프하면 그림 속 게임을 할 수 있어요!" />
+      <ControlsGuide guide={guide} tip="액자를 누르면 크게 보고, 벤치에 앉을 수 있어요. 문으로 걸어가면 작가 전시실에 들어가요. 빛나는 그림 앞에서 점프하면 그림 속 게임을 할 수 있어요! 큰 휴대폰을 누르면 하루들을 바로 써 볼 수 있어요." />
       <ArtworkModal work={selected} onClose={closeWork} />
       <AuthorBoothModal open={boothOpen} onClose={() => setBoothOpen(false)} />
+      <HarudlePhoneModal open={phoneOpen} onClose={() => setPhoneOpen(false)} />
       <PaintingGame open={paintingStage === 'inside'} work={paintingWork} nickname={nickname} onExit={exitPainting} />
       {zone && (
         <CheerBoardModal open={cheersOpen} artist={zone.nickname} board={cheers} onClose={() => setCheersOpen(false)} />
