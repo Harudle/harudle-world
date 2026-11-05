@@ -1,0 +1,69 @@
+name: 배포
+
+# 사람이 Actions 화면에서 버튼을 눌렀을 때만 돈다. 쓰기 권한이 있는 사람만 누를 수 있다.
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 할 일
+        type: choice
+        options: [deploy, rollback]
+        default: deploy
+
+# 여러 명이 눌러도 하나씩 차례로 돈다. 진행 중인 배포를 끊지 않는다.
+concurrency:
+  group: production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      ACTION: ${{ inputs.action }}
+      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: 서버 접속 준비
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          printf 'Host deploy-server\n  HostName %s\n  User ec2-user\n  IdentityFile ~/.ssh/deploy_key\n  IdentitiesOnly yes\n  BatchMode yes\n' "$DEPLOY_HOST" > ~/.ssh/config
+
+      - name: 데이터 백업
+        run: ssh deploy-server 'cd ~/harudle-world/deploy && ./backup.sh'
+
+      - name: 코드 올리기
+        if: env.ACTION == 'deploy'
+        run: >-
+          rsync -az
+          --exclude .git --exclude .github --exclude node_modules --exclude dist --exclude .data --exclude .DS_Store --exclude '*.pem'
+          --exclude deploy/.env --exclude deploy/.active-color --exclude deploy/.deploy.lock --exclude deploy/backups --exclude deploy/caddy/upstream.caddy
+          ./ deploy-server:~/harudle-world/
+
+      - name: 무중단 배포
+        if: env.ACTION == 'deploy'
+        run: ssh deploy-server 'cd ~/harudle-world/deploy && ./deploy.sh'
+
+      - name: 직전 버전으로 되돌리기
+        if: env.ACTION == 'rollback'
+        run: ssh deploy-server 'cd ~/harudle-world/deploy && ./deploy.sh rollback'
+
+      - name: 사이트 확인
+        run: curl -fsS -o /dev/null --retry 5 --retry-delay 3 --retry-all-errors https://world.harudle.com/
+
+      - name: 접속 정보 지우기
+        if: always()
+        run: rm -f ~/.ssh/deploy_key

@@ -1,0 +1,13 @@
+# HTTPS 인증서는 Caddy가 자동으로 받고 갱신한다.
+{$DOMAIN} {
+	encode gzip
+	header {
+		Referrer-Policy strict-origin-when-cross-origin
+		X-Frame-Options SAMEORIGIN
+	}
+	# 상태 확인 주소는 서버 안에서만 쓴다.
+	@health path /health
+	respond @health 404
+	# 지금 트래픽을 받는 쪽. deploy.sh가 바꾼다.
+	import upstream.caddy
+}
