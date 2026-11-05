@@ -1,5 +1,7 @@
-import { useMemo } from 'react'
-import { Billboard, RoundedBox } from '@react-three/drei'
+import { useMemo, useRef, useState } from 'react'
+import { Billboard, RoundedBox, useCursor } from '@react-three/drei'
+import { useFrame, type ThreeEvent } from '@react-three/fiber'
+import * as THREE from 'three'
 import { COLORS, FONT_DISPLAY } from '../../lib/brand'
 import { HarudleFrame } from '../../ui/HarudleFrame'
 import { PaperCut } from '../Room'
@@ -7,7 +9,7 @@ import { speechBubble } from '../shapes'
 import { Toon } from '../toon'
 import { useCanvasTexture, type DrawFn } from '../useCanvasTexture'
 import { WebScreen } from '../WebScreen'
-import { PHONE_POSITION, PHONE_ROTATION_Y } from './layout'
+import { PHONE_KIOSK_OFFSET, PHONE_POSITION, PHONE_ROTATION_Y } from './layout'
 
 const SCREEN_WIDTH = 2.4
 const SCREEN_HEIGHT = 4.8
@@ -30,10 +32,79 @@ const drawBubble: DrawFn = (ctx, w, h) => {
   ctx.fillText('하루들 직접 써 보기', w / 2, h / 2 + h * 0.03)
 }
 
+const drawKiosk: DrawFn = (ctx, w, h) => {
+  ctx.fillStyle = COLORS.primaryDeep
+  ctx.fillRect(0, 0, w, h)
+  ctx.fillStyle = '#ffffff'
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.font = `${h * 0.34}px ${FONT_DISPLAY}`
+  ctx.fillText('⤢', w / 2, h * 0.3)
+  ctx.font = `${h * 0.22}px ${FONT_DISPLAY}`
+  ctx.fillText('크게 열기', w / 2, h * 0.72)
+}
+
+/** 휴대폰 옆의 작은 받침대. 누르면 하루들을 휴대폰 크기 창으로 크게 연다. 앞면이 +z다. */
+function OpenKiosk({ paused, onOpen }: { paused: boolean; onOpen: () => void }) {
+  const [hovered, setHovered] = useState(false)
+  const lifted = useRef<THREE.Group>(null)
+  const label = useCanvasTexture(drawKiosk, 256, 256)
+  const active = hovered && !paused
+
+  useCursor(active)
+
+  useFrame((_, delta) => {
+    if (!lifted.current) return
+    const scale = THREE.MathUtils.damp(lifted.current.scale.x, active ? 1.08 : 1, 12, delta)
+    lifted.current.scale.setScalar(scale)
+  })
+
+  const handleClick = (event: ThreeEvent<MouseEvent>) => {
+    event.stopPropagation()
+    if (event.delta > 6 || paused) return
+    onOpen()
+  }
+
+  return (
+    <group position={PHONE_KIOSK_OFFSET}>
+      <mesh position-y={0.8} castShadow>
+        <cylinderGeometry args={[0.08, 0.08, 1.6, 10]} />
+        <Toon color={COLORS.paper} outlineThickness={1.2} />
+      </mesh>
+      <RoundedBox args={[0.9, 0.12, 0.9]} radius={0.05} position-y={0.05} castShadow receiveShadow>
+        <Toon color={COLORS.primaryDeep} />
+      </RoundedBox>
+      <group ref={lifted} position-y={2.05} rotation-x={-0.3}>
+        <RoundedBox args={[1.3, 1.3, 0.12]} radius={0.08} castShadow>
+          <Toon color={COLORS.primaryDeep} />
+        </RoundedBox>
+        <mesh position-z={0.065}>
+          <planeGeometry args={[1.16, 1.16]} />
+          <meshBasicMaterial map={label} toneMapped={false} />
+        </mesh>
+      </group>
+      {/* 움직여도 호버가 끊기지 않는 판정 상자 */}
+      <mesh
+        position-y={1.4}
+        onPointerOver={(event) => {
+          event.stopPropagation()
+          if (event.pointerType === 'mouse') setHovered(true)
+        }}
+        onPointerOut={() => setHovered(false)}
+        onClick={handleClick}
+      >
+        <boxGeometry args={[1.5, 2.8, 1.2]} />
+        <meshBasicMaterial transparent opacity={0} depthWrite={false} />
+      </mesh>
+    </group>
+  )
+}
+
 /**
  * 전시관 안에 세워 둔 큰 휴대폰. 화면에 하루들이 그대로 떠 있어서 바로 누르고 스크롤할 수 있다. 화면이 +z를 본다.
+ * 화면이 작게 보이는 사람은 옆 받침대로 휴대폰 크기 창을 열 수 있다.
  */
-export function HarudlePhone() {
+export function HarudlePhone({ paused, onOpen }: { paused: boolean; onOpen: () => void }) {
   const bubbleText = useCanvasTexture(drawBubble, 640, 128)
   const bubble = useMemo(() => speechBubble(2.9, 0.78, 0.26), [])
 
@@ -73,6 +144,8 @@ export function HarudlePhone() {
           <HarudleFrame className="relative size-full border-0 bg-transparent" />
         </WebScreen>
       </group>
+
+      <OpenKiosk paused={paused} onOpen={onOpen} />
 
       <group position-y={STAND_HEIGHT + BODY_HEIGHT + 0.35}>
         <Billboard>

@@ -46,6 +46,7 @@ type GalleryCanvasProps = {
   cheerCount: number
   onOpenCheers: () => void
   onOpenBooth: () => void
+  onOpenPhone: () => void
   /** 뛰어들 수 있는 그림이 걸린 자리 */
   portalSlot: ArtSlot | null
   diving: boolean
@@ -86,6 +87,7 @@ export default function GalleryCanvas({
   cheerCount,
   onOpenCheers,
   onOpenBooth,
+  onOpenPhone,
   portalSlot,
   diving,
   suspended,
@@ -181,7 +183,7 @@ export default function GalleryCanvas({
           <>
             <MainHall doors={doors} paused={paused} onFloorClick={handleFloorClick} onDoor={onDoor} onSit={handleSit} />
             <AuthorBooth paused={paused} onOpen={onOpenBooth} />
-            <HarudlePhone />
+            <HarudlePhone paused={paused} onOpen={onOpenPhone} />
           </>
         )}
         {slots.map((slot, index) => {

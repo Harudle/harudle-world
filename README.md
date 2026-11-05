@@ -68,7 +68,7 @@ src/
 
 ## 하루들 휴대폰
 
-메인 전시실 카펫 오른쪽의 큰 휴대폰 화면에 `https://www.harudle.com`이 그대로 떠 있어서, 걸어가서 화면을 누르고 스크롤하며 하루들을 쓸 수 있습니다. 웹 페이지는 three의 `CSS3DRenderer`로 캔버스 뒤에 깔고 화면 자리만 캔버스를 투명하게 뚫어 보여 줍니다(`src/scene/WebScreen.tsx`). 그래서 캔버스는 마우스를 받지 않고 바깥 상자(`data-scene`)가 3D 화면의 입력을 받습니다. 화면이 작게 보이면 "하루들 열기" 버튼으로 휴대폰 크기 창을 엽니다.
+메인 전시실 카펫 오른쪽의 큰 휴대폰 화면에 `https://www.harudle.com`이 그대로 떠 있어서, 걸어가서 화면을 누르고 스크롤하며 하루들을 쓸 수 있습니다. 웹 페이지는 three의 `CSS3DRenderer`로 캔버스 뒤에 깔고 화면 자리만 캔버스를 투명하게 뚫어 보여 줍니다(`src/scene/WebScreen.tsx`). 그래서 캔버스는 마우스를 받지 않고 바깥 상자(`data-scene`)가 3D 화면의 입력을 받습니다. 화면이 작게 보이면 휴대폰 옆 "크게 열기" 받침대나 "하루들 열기" 버튼으로 휴대폰 크기 창을 엽니다.
 
 하루들이 `X-Frame-Options: DENY`를 보내는 동안에는 화면이 비어 보입니다. 하루들 쪽에서 이 헤더 대신 `Content-Security-Policy: frame-ancestors 'self' https://world.harudle.com`을 보내야 합니다.
 

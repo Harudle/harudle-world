@@ -193,6 +193,7 @@ export function GallerySpace({ onExit }: { onExit: () => void }) {
           cheerCount={cheers.total}
           onOpenCheers={() => setCheersOpen(true)}
           onOpenBooth={() => setBoothOpen(true)}
+          onOpenPhone={() => setPhoneOpen(true)}
           portalSlot={paintingSlot}
           diving={paintingStage === 'diving'}
           suspended={paintingStage === 'inside'}
@@ -240,7 +241,7 @@ export function GallerySpace({ onExit }: { onExit: () => void }) {
       <TouchJoystick input={joystick} onUse={guide.dismissHint} />
       <ActionButtons controls={joystick} throwRequest={play.throwRequest} hitNotice={hitNotice} />
       <ChatPanel chat={chat} />
-      <ControlsGuide guide={guide} tip="액자를 누르면 크게 보고, 벤치에 앉을 수 있어요. 문으로 걸어가면 작가 전시실에 들어가요. 빛나는 그림 앞에서 점프하면 그림 속 게임을 할 수 있어요! 큰 휴대폰 화면을 눌러 하루들을 바로 써 볼 수 있어요." />
+      <ControlsGuide guide={guide} tip="액자를 누르면 크게 보고, 벤치에 앉을 수 있어요. 문으로 걸어가면 작가 전시실에 들어가요. 빛나는 그림 앞에서 점프하면 그림 속 게임을 할 수 있어요! 큰 휴대폰 화면을 눌러 하루들을 바로 써 보거나, 옆 받침대로 크게 열 수 있어요." />
       <ArtworkModal work={selected} onClose={closeWork} />
       <AuthorBoothModal open={boothOpen} onClose={() => setBoothOpen(false)} />
       <HarudlePhoneModal open={phoneOpen} onClose={() => setPhoneOpen(false)} />

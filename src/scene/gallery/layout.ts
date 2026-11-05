@@ -105,6 +105,16 @@ export const BOOTH_ROTATION_Y = 0.55
 /** 하루들을 직접 써 볼 수 있는 큰 휴대폰. 부스와 마주 보도록 카펫 오른쪽에 비스듬히 세운다. */
 export const PHONE_POSITION: [number, number, number] = [6.4, 0, -2]
 export const PHONE_ROTATION_Y = -0.5
+/** 휴대폰 오른쪽에 둔 '크게 열기' 받침대. 휴대폰 기준 위치다. */
+export const PHONE_KIOSK_OFFSET: [number, number, number] = [2.4, 0, 0.4]
+
+/** 휴대폰 기준 위치를 전시실 바닥 좌표로 바꾼다. */
+function phoneLocalToWorld([x, , z]: [number, number, number]) {
+  const cos = Math.cos(PHONE_ROTATION_Y)
+  const sin = Math.sin(PHONE_ROTATION_Y)
+  return { x: PHONE_POSITION[0] + x * cos + z * sin, z: PHONE_POSITION[2] - x * sin + z * cos }
+}
+const PHONE_KIOSK = phoneLocalToWorld(PHONE_KIOSK_OFFSET)
 
 export const MAIN_SPACE: SpaceBounds = {
   halfX: MAIN_HALF_X,
@@ -114,6 +124,7 @@ export const MAIN_SPACE: SpaceBounds = {
     ...TREES.map((tree) => ({ x: tree.x, z: tree.z, radius: 0.6 })),
     { x: BOOTH_POSITION[0], z: BOOTH_POSITION[2], radius: 2.7 },
     { x: PHONE_POSITION[0], z: PHONE_POSITION[2], radius: 1.6 },
+    { x: PHONE_KIOSK.x, z: PHONE_KIOSK.z, radius: 0.7 },
   ],
   seats: benchSeats(BENCHES),
 }
