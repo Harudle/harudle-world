@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import { sanitizeAvatar, type AvatarConfig } from './avatar'
+import { isEaselBrush, sanitizeSegment, type EaselBrush, type EaselSegment } from './easel'
 
 export type PresenceStatus = 'connecting' | 'online' | 'offline' | 'full'
 
@@ -65,6 +66,12 @@ export type PlayState = {
   notify: (text: string) => void
 }
 
+/** 이젤 붓 줍기, 내려놓기, 칸 칠하기, 새 종이 */
+export type EaselAction = { t: 'easel-pick' } | { t: 'easel-drop' } | ({ t: 'easel-draw' } & EaselSegment) | { t: 'easel-clear' }
+
+/** 이젤 그림. 선 조각이 자주 늘어나므로 목록은 ref에 두고, 바뀔 때마다 version만 올린다. */
+export type EaselArt = { segments: RefObject<EaselSegment[]>; version: number }
+
 const MAX_FLYING_PAPERS = 40
 const MAX_CHAT_MESSAGES = 50
 const MAX_PAINT_MARKS = 6
@@ -97,6 +104,9 @@ export function usePresence(active: boolean, avatar: AvatarConfig, doodle: boole
   const [chatReject, setChatReject] = useState<{ reason: ChatReject; key: number } | null>(null)
   const [throws, setThrows] = useState<PaperThrow[]>([])
   const [hitNotice, setHitNotice] = useState<{ text: string; key: number } | null>(null)
+  const [easel, setEasel] = useState<EaselBrush | null>(null)
+  const easelSegments = useRef<EaselSegment[]>([])
+  const [easelVersion, setEaselVersion] = useState(0)
   const hits = useRef(new Map<number, number>())
   const knocks = useRef(new Map<number, number>())
   const swings = useRef(new Map<number, BrushSwing>())
@@ -159,7 +169,7 @@ export function usePresence(active: boolean, avatar: AvatarConfig, doodle: boole
       }
 
       socket.onmessage = (event) => {
-        let message: { t?: string; id?: number; total?: number; players?: unknown[]; nickname?: unknown; text?: unknown; reason?: ChatReject; from?: unknown; to?: unknown; x?: unknown; z?: unknown; knock?: unknown; color?: unknown; items?: { id?: unknown; nickname?: unknown; text?: unknown; at?: unknown }[] }
+        let message: { t?: string; holder?: unknown; segs?: unknown[]; id?: number; total?: number; players?: unknown[]; nickname?: unknown; text?: unknown; reason?: ChatReject; from?: unknown; to?: unknown; x?: unknown; z?: unknown; knock?: unknown; color?: unknown; items?: { id?: unknown; nickname?: unknown; text?: unknown; at?: unknown }[] }
         try {
           message = JSON.parse(event.data)
         } catch {
@@ -209,6 +219,18 @@ export function usePresence(active: boolean, avatar: AvatarConfig, doodle: boole
             chatKey.current += 1
             setHitNotice({ text: `${typeof message.nickname === 'string' && message.nickname ? message.nickname : '누군가'}님이 붓으로 칠했어요!`, key: chatKey.current })
           }
+        } else if (message.t === 'easel') {
+          const { t: _type, ...brush } = message
+          if (isEaselBrush(brush)) setEasel({ holder: brush.holder, x: brush.x, z: brush.z })
+        } else if (message.t === 'easel-art' && Array.isArray(message.segs)) {
+          easelSegments.current = message.segs.flatMap((segment) => sanitizeSegment(segment) ?? [])
+          setEaselVersion((version) => version + 1)
+        } else if (message.t === 'easel-seg') {
+          // 내가 그린 선은 보낼 때 이미 넣어 두었다.
+          const segment = sanitizeSegment(message)
+          if (!segment || message.from === myId) return
+          easelSegments.current.push(segment)
+          setEaselVersion((version) => version + 1)
         } else if (message.t === 'chat-reject' && message.reason) {
           chatKey.current += 1
           setChatReject({ reason: message.reason, key: chatKey.current })
@@ -247,6 +269,9 @@ export function usePresence(active: boolean, avatar: AvatarConfig, doodle: boole
         positions.current.clear()
         setOthers([])
         setTotal(1)
+        setEasel(null)
+        easelSegments.current = []
+        setEaselVersion((version) => version + 1)
         if (stopped) return
         if (event.code === CLOSE_FULL) {
           setStatus('full')
@@ -285,6 +310,10 @@ export function usePresence(active: boolean, avatar: AvatarConfig, doodle: boole
     setMessages([])
     setSpeech({})
     setThrows([])
+    // 이젤 방에 다시 들어오면 서버가 지금 상태를 보내 준다.
+    setEasel(null)
+    easelSegments.current = []
+    setEaselVersion((version) => version + 1)
   }, [room])
 
   const sendMove = useCallback(({ x, z, heading, moving, seated, jumping }: MoveUpdate) => {
@@ -320,6 +349,17 @@ export function usePresence(active: boolean, avatar: AvatarConfig, doodle: boole
     if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ t: 'brush', to }))
   }, [])
 
+  /** 그린 선은 서버 답을 기다리지 않고 내 화면에 먼저 넣는다. 서버가 거절하면 그림 전체를 다시 보내 준다. */
+  const sendEasel = useCallback((action: EaselAction) => {
+    const socket = socketRef.current
+    if (socket?.readyState !== WebSocket.OPEN) return
+    socket.send(JSON.stringify(action))
+    if (action.t === 'easel-draw') {
+      easelSegments.current.push({ c: action.c, w: action.w, p: action.p })
+      setEaselVersion((version) => version + 1)
+    }
+  }, [])
+
   /** 종이가 도착하면 목록에서 빼고, 맞은 사람을 표시한다. */
   const finishThrow = useCallback((paper: PaperThrow) => {
     setThrows((current) => current.filter((candidate) => candidate.key !== paper.key))
@@ -331,6 +371,8 @@ export function usePresence(active: boolean, avatar: AvatarConfig, doodle: boole
     setHitNotice({ text, key: chatKey.current })
   }, [])
 
+  const easelArt = useMemo<EaselArt>(() => ({ segments: easelSegments, version: easelVersion }), [easelVersion])
+
   const holdsBrush = avatar.held === 'brush'
   const play = useMemo<PlayState>(
     () => ({ myId, throws, hits, knocks, throwRequest, holdsBrush, swings, paints, sendBrush, sendThrow, finishThrow, notify }),
@@ -339,5 +381,5 @@ export function usePresence(active: boolean, avatar: AvatarConfig, doodle: boole
 
   const chat = { status, messages, reject: chatReject, send: sendChat, mute: muteChat }
 
-  return { status, others, total, positions, sendMove, chat, speech, mySpeech: myId === null ? '' : (speech[myId] ?? ''), play, hitNotice }
+  return { status, others, total, positions, sendMove, chat, speech, mySpeech: myId === null ? '' : (speech[myId] ?? ''), play, hitNotice, easel, easelArt, sendEasel, notify }
 }

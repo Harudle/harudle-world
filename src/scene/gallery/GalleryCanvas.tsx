@@ -4,12 +4,16 @@ import { Canvas, type ThreeEvent } from '@react-three/fiber'
 import * as THREE from 'three'
 import type { AvatarConfig } from '../../data/avatar'
 import type { Cheer } from '../../data/cheers'
+import type { EaselBrush } from '../../data/easel'
+import type { EaselArt } from '../../data/presence'
 import type { ArtistZone, GalleryWork } from '../../data/galleryWorks'
 import type { MoveUpdate, RemotePlayer, RemotePosition, SpeechMap, PlayState } from '../../data/presence'
 import { COLORS } from '../../lib/brand'
 import { Artwork } from './Artwork'
 import { PaintingPortal } from './PaintingPortal'
 import { AuthorBooth } from './AuthorBooth'
+import { EaselCorner, type EaselNear } from './EaselCorner'
+import { HarudlePhone } from './HarudlePhone'
 import { CheerStand } from './CheerStand'
 import { ArtistRoom, MainHall } from './Hall'
 import { MAIN_SLOTS, MAIN_SPACE, MAIN_START, type ArtSlot, type DoorSpot, type RoomLayout } from './layout'
@@ -45,6 +49,13 @@ type GalleryCanvasProps = {
   cheerCount: number
   onOpenCheers: () => void
   onOpenBooth: () => void
+  onOpenPhone: () => void
+  easel: EaselBrush | null
+  easelArt: EaselArt
+  easelHolderName: string
+  onEaselPick: () => void
+  onOpenEaselCanvas: () => void
+  onEaselNear: (near: EaselNear) => void
   /** 뛰어들 수 있는 그림이 걸린 자리 */
   portalSlot: ArtSlot | null
   diving: boolean
@@ -85,6 +96,13 @@ export default function GalleryCanvas({
   cheerCount,
   onOpenCheers,
   onOpenBooth,
+  onOpenPhone,
+  easel,
+  easelArt,
+  easelHolderName,
+  onEaselPick,
+  onOpenEaselCanvas,
+  onEaselNear,
   portalSlot,
   diving,
   suspended,
@@ -108,6 +126,15 @@ export default function GalleryCanvas({
     seatRequest.current = point
   }, [])
 
+  const walkTo = useCallback(
+    (x: number, z: number) => {
+      const target = new THREE.Vector3(x, 0, z)
+      resolveCollisions(target, space)
+      moveTarget.current = target
+    },
+    [space],
+  )
+
   const handleFloorClick = useCallback(
     (event: ThreeEvent<MouseEvent>) => {
       if (event.delta > 6) return
@@ -120,7 +147,9 @@ export default function GalleryCanvas({
 
   return (
     <Canvas
-      className="!absolute inset-0"
+      // 휴대폰 화면(웹 페이지)이 캔버스 뒤에 깔리므로, 그 순서가 HUD 위로 새어 나가지 않게 따로 쌓는다.
+      className="!absolute inset-0 isolate"
+      data-scene=""
       frameloop={suspended ? 'never' : 'always'}
       shadows={{ type: THREE.PCFShadowMap }}
       flat
@@ -178,6 +207,20 @@ export default function GalleryCanvas({
           <>
             <MainHall doors={doors} paused={paused} onFloorClick={handleFloorClick} onDoor={onDoor} onSit={handleSit} />
             <AuthorBooth paused={paused} onOpen={onOpenBooth} />
+            <HarudlePhone paused={paused} onOpen={onOpenPhone} />
+            <EaselCorner
+              easel={easel}
+              art={easelArt}
+              myId={play.myId}
+              holderName={easelHolderName}
+              leader={leader}
+              paused={paused || overview}
+              onWalkTo={walkTo}
+              onPick={onEaselPick}
+              onOpenCanvas={onOpenEaselCanvas}
+              onNotify={play.notify}
+              onNearChange={onEaselNear}
+            />
           </>
         )}
         {slots.map((slot, index) => {

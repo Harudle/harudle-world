@@ -18,6 +18,7 @@ type GalleryHudProps = {
   cheerCount: number
   onOpenCheers: () => void
   onOpenBooth: () => void
+  onOpenPhone: () => void
   onCustomize: () => void
   onOpenGuide: () => void
   onOverviewChange: (overview: boolean) => void
@@ -91,6 +92,7 @@ export function GalleryHud({
   cheerCount,
   onOpenCheers,
   onOpenBooth,
+  onOpenPhone,
   onCustomize,
   onOpenGuide,
   onOverviewChange,
@@ -163,6 +165,7 @@ export function GalleryHud({
             {zones.length > 0 && <RoomList zones={zones} onRoomSelect={onRoomSelect} />}
             <TouchMenuItem onClick={onCustomize}>내 모습 꾸미기</TouchMenuItem>
             <TouchMenuItem onClick={onOpenBooth}>작가 체험</TouchMenuItem>
+            <TouchMenuItem onClick={onOpenPhone}>하루들 열기</TouchMenuItem>
             <TouchMenuItem onClick={onOpenGuide}>조작법</TouchMenuItem>
             <div className="mt-1 border-t-2 border-haru-100 px-2 py-1">
               <DoodleSwitch settings={settings} onSettingsChange={onSettingsChange} />
@@ -200,6 +203,9 @@ export function GalleryHud({
           </button>
           <button type="button" onClick={onOpenBooth} className={PC_BUTTON}>
             작가 체험
+          </button>
+          <button type="button" onClick={onOpenPhone} className={PC_BUTTON}>
+            하루들 열기
           </button>
         </div>
       </footer>

@@ -102,6 +102,29 @@ export const TREES: { x: number; z: number; scale: number }[] = [
 export const BOOTH_POSITION: [number, number, number] = [-6.6, 0, -2.5]
 export const BOOTH_ROTATION_Y = 0.55
 
+/** 하루들을 직접 써 볼 수 있는 큰 휴대폰. 부스와 마주 보도록 카펫 오른쪽에 비스듬히 세운다. */
+export const PHONE_POSITION: [number, number, number] = [6.4, 0, -2]
+export const PHONE_ROTATION_Y = -0.5
+/** 휴대폰 오른쪽에 둔 '크게 열기' 받침대. 휴대폰 기준 위치다. */
+export const PHONE_KIOSK_OFFSET: [number, number, number] = [2.4, 0, 0.4]
+
+/** 휴대폰 기준 위치를 전시실 바닥 좌표로 바꾼다. */
+function phoneLocalToWorld([x, , z]: [number, number, number]) {
+  const cos = Math.cos(PHONE_ROTATION_Y)
+  const sin = Math.sin(PHONE_ROTATION_Y)
+  return { x: PHONE_POSITION[0] + x * cos + z * sin, z: PHONE_POSITION[2] - x * sin + z * cos }
+}
+const PHONE_KIOSK = phoneLocalToWorld(PHONE_KIOSK_OFFSET)
+
+/** 함께 그리는 네컷 이젤. 카펫 왼쪽 앞 벤치 옆에 세우고, 카펫과 입구 쪽을 보도록 비스듬히 돌린다. */
+export const EASEL_POSITION: [number, number, number] = [-5.2, 0, 7.2]
+export const EASEL_ROTATION_Y = 0.35
+/** 이젤 붓이 처음 놓여 있는 바닥 자리. 이젤 앞 카펫 쪽이다. */
+export const EASEL_BRUSH_HOME = { x: -3.4, z: 8.8 }
+/** 이젤 붓을 주울 수 있는 거리와 이젤에서 그릴 수 있는 거리. 서버도 같은 값으로 확인한다. */
+export const EASEL_PICK_REACH = 1.8
+export const EASEL_PAINT_REACH = 3.4
+
 export const MAIN_SPACE: SpaceBounds = {
   halfX: MAIN_HALF_X,
   halfZ: MAIN_HALF_Z,
@@ -109,6 +132,9 @@ export const MAIN_SPACE: SpaceBounds = {
     ...BENCHES.map((bench) => ({ x: bench.x, z: bench.z, radius: 1.3 })),
     ...TREES.map((tree) => ({ x: tree.x, z: tree.z, radius: 0.6 })),
     { x: BOOTH_POSITION[0], z: BOOTH_POSITION[2], radius: 2.7 },
+    { x: PHONE_POSITION[0], z: PHONE_POSITION[2], radius: 1.6 },
+    { x: PHONE_KIOSK.x, z: PHONE_KIOSK.z, radius: 0.7 },
+    { x: EASEL_POSITION[0], z: EASEL_POSITION[2], radius: 1.3 },
   ],
   seats: benchSeats(BENCHES),
 }

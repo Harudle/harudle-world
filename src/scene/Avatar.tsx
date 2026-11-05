@@ -5,6 +5,7 @@ import * as THREE from 'three'
 import type { AvatarConfig } from '../data/avatar'
 import { COLORS } from '../lib/brand'
 import { drawSketch, Ink, INK, Line, Skin, useLegSwing, type WalkMotion } from './Characters'
+import { EASEL_BRUSH_SCALE, EaselBrushModel } from './EaselBrushModel'
 import { useCanvasTexture } from './useCanvasTexture'
 
 const HEAD_Y = 1.3
@@ -359,7 +360,7 @@ function HeldItem({ kind, color }: { kind: AvatarConfig['held']; color: string }
 const SWING_ANGLE = 2.2
 
 /** 붓을 든 오른팔. 어깨를 축으로 앞으로 휘둘러 상대를 칠한다. */
-function BrushArm({ color, motion }: { color: string; motion?: RefObject<WalkMotion> }) {
+function BrushArm({ color, motion, easel = false }: { color: string; motion?: RefObject<WalkMotion>; easel?: boolean }) {
   const arm = useRef<THREE.Group>(null)
   useFrame(() => {
     if (arm.current) arm.current.rotation.x = -(motion?.current?.swing ?? 0) * SWING_ANGLE
@@ -369,6 +370,14 @@ function BrushArm({ color, motion }: { color: string; motion?: RefObject<WalkMot
       <group rotation-z={1}>
         <Line length={0.38} />
       </group>
+      {easel ? (
+        // 바닥에 놓여 있던 큰 이젤 붓을 그대로 든다. 손이 막대 아래쪽을 쥔다.
+        <group position={[0.3, -0.2, 0.08]} rotation={[0.2, 0, -0.3]}>
+          <group position-y={0.45 * EASEL_BRUSH_SCALE}>
+            <EaselBrushModel tipColor={color} />
+          </group>
+        </group>
+      ) : (
       <group position={[0.3, -0.2, 0.08]} rotation={[0.2, 0, -0.3]}>
         <mesh position-y={0.14} castShadow>
           <cylinderGeometry args={[0.026, 0.034, 0.56, 8]} />
@@ -387,12 +396,16 @@ function BrushArm({ color, motion }: { color: string; motion?: RefObject<WalkMot
           <Skin color={color} thickness={1.1} />
         </mesh>
       </group>
+      )}
     </group>
   )
 }
 
+/** 화면에서만 덧붙이는 모습. easelBrush면 이젤 붓을 든 모습으로 그리고, 서버로는 보내지 않는다. */
+type ShownAvatar = AvatarConfig & { easelBrush?: boolean }
+
 type AvatarProps = {
-  config: AvatarConfig
+  config: ShownAvatar
   motion?: RefObject<WalkMotion>
 }
 
@@ -436,7 +449,7 @@ export function Avatar({ config, motion }: AvatarProps) {
             <Line length={0.38} />
           </group>
           {config.held === 'brush' ? (
-            <BrushArm color={config.heldColor} motion={motion} />
+            <BrushArm color={config.heldColor} motion={motion} easel={config.easelBrush} />
           ) : (
             <group position={[0.14, 0.92, 0]} rotation-z={holdingSide ? 1 : 0.35}>
               <Line length={0.38} />
