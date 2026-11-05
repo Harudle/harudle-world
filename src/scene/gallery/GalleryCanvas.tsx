@@ -4,7 +4,8 @@ import { Canvas, type ThreeEvent } from '@react-three/fiber'
 import * as THREE from 'three'
 import type { AvatarConfig } from '../../data/avatar'
 import type { Cheer } from '../../data/cheers'
-import type { EaselState } from '../../data/easel'
+import type { EaselBrush } from '../../data/easel'
+import type { EaselArt } from '../../data/presence'
 import type { ArtistZone, GalleryWork } from '../../data/galleryWorks'
 import type { MoveUpdate, RemotePlayer, RemotePosition, SpeechMap, PlayState } from '../../data/presence'
 import { COLORS } from '../../lib/brand'
@@ -49,10 +50,11 @@ type GalleryCanvasProps = {
   onOpenCheers: () => void
   onOpenBooth: () => void
   onOpenPhone: () => void
-  easel: EaselState | null
+  easel: EaselBrush | null
+  easelArt: EaselArt
   easelHolderName: string
   onEaselPick: () => void
-  onEaselFill: (region: number) => void
+  onOpenEaselCanvas: () => void
   onEaselNear: (near: EaselNear) => void
   /** 뛰어들 수 있는 그림이 걸린 자리 */
   portalSlot: ArtSlot | null
@@ -96,9 +98,10 @@ export default function GalleryCanvas({
   onOpenBooth,
   onOpenPhone,
   easel,
+  easelArt,
   easelHolderName,
   onEaselPick,
-  onEaselFill,
+  onOpenEaselCanvas,
   onEaselNear,
   portalSlot,
   diving,
@@ -207,13 +210,14 @@ export default function GalleryCanvas({
             <HarudlePhone paused={paused} onOpen={onOpenPhone} />
             <EaselCorner
               easel={easel}
+              art={easelArt}
               myId={play.myId}
               holderName={easelHolderName}
               leader={leader}
               paused={paused || overview}
               onWalkTo={walkTo}
               onPick={onEaselPick}
-              onFill={onEaselFill}
+              onOpenCanvas={onOpenEaselCanvas}
               onNotify={play.notify}
               onNearChange={onEaselNear}
             />

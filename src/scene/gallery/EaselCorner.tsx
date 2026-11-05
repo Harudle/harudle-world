@@ -2,38 +2,41 @@ import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
 import { RoundedBox, useCursor } from '@react-three/drei'
 import { useFrame, type ThreeEvent } from '@react-three/fiber'
 import * as THREE from 'three'
-import type { EaselState } from '../../data/easel'
+import type { EaselBrush } from '../../data/easel'
+import type { EaselArt } from '../../data/presence'
 import { COLORS } from '../../lib/brand'
 import { usePrefersReducedMotion } from '../../lib/usePrefersReducedMotion'
+import { EaselBrushModel } from '../EaselBrushModel'
 import { Toon } from '../toon'
 import { useCanvasTexture, type DrawFn } from '../useCanvasTexture'
-import { drawEaselArt, EASEL_ART_SIZE, easelRegionAt } from './easelArt'
+import { drawFrame, drawPaper } from './easelDrawing'
 import { EASEL_BRUSH_HOME, EASEL_PAINT_REACH, EASEL_PICK_REACH, EASEL_POSITION, EASEL_ROTATION_Y } from './layout'
 
 const WOOD = '#B9855A'
 const BOARD_SIZE = 2.3
 const BOARD_Y = 2.35
 const BOARD_TILT = -0.12
-const EMPTY_FILLS: number[] = []
+const ART_PIXELS = 512
 /** 이젤 앞에서 칠하기 좋은 자리. 이젤을 눌렀는데 멀면 여기로 걸어간다. */
 const FRONT_GAP = 2.2
 
 export type EaselNear = { brush: boolean; easel: boolean }
 
 type EaselCornerProps = {
-  easel: EaselState | null
+  easel: EaselBrush | null
+  art: EaselArt
   myId: number | null
   holderName: string
   leader: RefObject<THREE.Vector3>
   paused: boolean
   onWalkTo: (x: number, z: number) => void
   onPick: () => void
-  onFill: (region: number) => void
+  onOpenCanvas: () => void
   onNotify: (text: string) => void
   onNearChange: (near: EaselNear) => void
 }
 
-/** 바닥에 누운 이젤 붓. 붓 끝은 보라색이다. */
+/** 바닥에 누운 이젤 붓. 멀리서도 보이게 손에 드는 붓보다 크게 둔다. */
 function GroundBrush({ x, z, active, onClick, onHover }: {
   x: number
   z: number
@@ -54,22 +57,11 @@ function GroundBrush({ x, z, active, onClick, onHover }: {
   return (
     <group position={[x, 0, z]}>
       <mesh ref={ring} rotation-x={-Math.PI / 2} position-y={0.02}>
-        <ringGeometry args={[0.55, 0.68, 32]} />
+        <ringGeometry args={[0.85, 1.02, 40]} />
         <meshBasicMaterial color={COLORS.butter} transparent depthWrite={false} />
       </mesh>
-      <group position-y={0.07} rotation={[0, 0.6, Math.PI / 2]} scale={active ? 1.15 : 1}>
-        <mesh position-y={-0.1} castShadow>
-          <cylinderGeometry args={[0.045, 0.06, 0.9, 10]} />
-          <Toon color={COLORS.butter} outlineThickness={1.2} />
-        </mesh>
-        <mesh position-y={0.4}>
-          <cylinderGeometry args={[0.07, 0.055, 0.12, 10]} />
-          <Toon color="#DBD6D1" outlineThickness={1.2} />
-        </mesh>
-        <mesh position-y={0.55} scale={[1, 1.6, 1]} castShadow>
-          <sphereGeometry args={[0.09, 14, 10]} />
-          <Toon color={COLORS.primary} outlineThickness={1.3} />
-        </mesh>
+      <group position-y={0.12} rotation={[0, 0.6, Math.PI / 2]} scale={active ? 1.12 : 1}>
+        <EaselBrushModel />
       </group>
       {/* 작은 붓도 누르기 쉽게 넓은 판정 상자를 둔다. */}
       <mesh
@@ -81,7 +73,7 @@ function GroundBrush({ x, z, active, onClick, onHover }: {
         onPointerOut={() => onHover(false)}
         onClick={onClick}
       >
-        <boxGeometry args={[1.3, 0.8, 1.3]} />
+        <boxGeometry args={[2, 0.9, 2]} />
         <meshBasicMaterial transparent opacity={0} depthWrite={false} />
       </mesh>
     </group>
@@ -89,16 +81,23 @@ function GroundBrush({ x, z, active, onClick, onHover }: {
 }
 
 /**
- * 메인 전시실의 함께 칠하는 네컷만화 이젤과, 하나뿐인 이젤 붓. 붓을 주운 사람만 이젤 가까이에서 칸을 눌러 칠할 수 있다.
- * 붓과 그림의 상태는 서버가 정하고, 여기서는 그리기와 가까이 있는지만 맡는다.
+ * 메인 전시실의 함께 그리는 네컷 이젤과, 하나뿐인 이젤 붓. 붓을 주운 사람이 이젤을 누르면 그림판이 열린다.
+ * 붓과 그림의 상태는 서버가 정하고, 여기서는 보여 주기와 가까이 있는지만 맡는다.
  */
-export function EaselCorner({ easel, myId, holderName, leader, paused, onWalkTo, onPick, onFill, onNotify, onNearChange }: EaselCornerProps) {
+export function EaselCorner({ easel, art, myId, holderName, leader, paused, onWalkTo, onPick, onOpenCanvas, onNotify, onNearChange }: EaselCornerProps) {
   const [hovered, setHovered] = useState<'brush' | 'board' | null>(null)
   const near = useRef<EaselNear>({ brush: false, easel: false })
   const pendingPick = useRef(false)
-  const fills = easel?.fills ?? EMPTY_FILLS
-  const draw = useCallback<DrawFn>((ctx) => drawEaselArt(ctx, fills), [fills])
-  const art = useCanvasTexture(draw, EASEL_ART_SIZE, EASEL_ART_SIZE)
+  // 선이 늘어날 때마다 이젤 그림을 다시 그린다.
+  const draw = useCallback<DrawFn>(
+    (ctx, w) => {
+      drawPaper(ctx, w, art.segments.current)
+      drawFrame(ctx, w)
+    },
+    // 선 목록은 ref라 version으로 바뀐 것을 안다.
+    [art.version, art.segments],
+  )
+  const texture = useCanvasTexture(draw, ART_PIXELS, ART_PIXELS)
   const holding = easel !== null && myId !== null && easel.holder === myId
   const brushOnFloor = easel === null || easel.holder === null
   const brushX = easel?.x ?? EASEL_BRUSH_HOME.x
@@ -148,22 +147,21 @@ export function EaselCorner({ easel, myId, holderName, leader, paused, onWalkTo,
     event.stopPropagation()
     if (event.delta > 6 || paused) return
     if (!easel) {
-      onNotify('다른 관람객과 연결되면 함께 칠할 수 있어요')
+      onNotify('다른 관람객과 연결되면 함께 그릴 수 있어요')
       return
     }
     if (!holding) {
-      onNotify(easel.holder === null ? '바닥에 있는 붓을 주워 와야 칠할 수 있어요' : `${holderName || '누군가'}님이 붓을 쓰고 있어요`)
+      onNotify(easel.holder === null ? '바닥에 있는 붓을 주워 와야 그릴 수 있어요' : `${holderName || '누군가'}님이 그리고 있어요`)
       return
     }
     if (!near.current.easel) {
       const normalX = Math.sin(EASEL_ROTATION_Y)
       const normalZ = Math.cos(EASEL_ROTATION_Y)
       onWalkTo(easelX + normalX * FRONT_GAP, easelZ + normalZ * FRONT_GAP)
-      onNotify('이젤 앞으로 가서 칠해요')
+      onNotify('이젤 앞으로 가서 그려요')
       return
     }
-    const region = event.uv ? easelRegionAt(event.uv.x, event.uv.y) : null
-    if (region !== null) onFill(region)
+    onOpenCanvas()
   }
 
   return (
@@ -198,7 +196,7 @@ export function EaselCorner({ easel, myId, holderName, leader, paused, onWalkTo,
             onClick={handleBoardClick}
           >
             <planeGeometry args={[BOARD_SIZE, BOARD_SIZE]} />
-            <meshBasicMaterial map={art} toneMapped={false} />
+            <meshBasicMaterial map={texture} toneMapped={false} />
           </mesh>
         </group>
       </group>

@@ -126,14 +126,13 @@ export function attachRealtime(server: Server, { path, maxPlayers, isOriginAllow
     if (socket.readyState === socket.OPEN && socket.bufferedAmount < MAX_BUFFERED_BYTES) socket.send(payload)
   }
 
-  const easel = createEasel((room, payload) => {
+  const easel = createEasel((room, payload, exceptId) => {
     for (const member of players.values()) {
-      if (member.room === room) send(member.socket, payload)
+      if (member.room === room && member.id !== exceptId) send(member.socket, payload)
     }
   })
   const sendEasel = (player: Player) => {
-    const payload = easel.snapshotFor(player.room)
-    if (payload) send(player.socket, payload)
+    for (const payload of easel.snapshotFor(player.room)) send(player.socket, payload)
   }
 
   /** 접속이 몰려도 명단을 한 번만 보내도록 바뀐 방을 모아 두었다가 주기적으로 보낸다. */
@@ -225,6 +224,7 @@ export function attachRealtime(server: Server, { path, maxPlayers, isOriginAllow
         }
       }
       if (!hit) return
+      easel.hit(hit, Date.now())
       const knock = countHit(hit, thrower, Date.now())
       const payload = JSON.stringify({ t: 'hit', id: hit.id, from: thrower.id, nickname: thrower.nickname, ...(knock ? { knock: true } : {}) })
       for (const member of players.values()) {
@@ -259,6 +259,13 @@ export function attachRealtime(server: Server, { path, maxPlayers, isOriginAllow
     if (target === null) {
       const flight = (Math.hypot(x - player.x, z - player.z, PAPER_DROP_HEIGHT) / PAPER_FLIGHT_SPEED) * 1000
       landPaper(player, x, z, Math.max(flight, PAPER_MIN_FLIGHT_MS))
+    } else if (!target.mutedPlayers.has(player.id)) {
+      // 겨냥한 종이는 늘 맞는다. 이젤 붓을 들고 있었다면 종이가 닿을 때 떨어뜨린다.
+      const struck = target
+      const flight = (Math.hypot(struck.x - player.x, struck.z - player.z) / PAPER_FLIGHT_SPEED) * 1000
+      setTimeout(() => {
+        if (players.has(struck.socket)) easel.hit(struck, Date.now())
+      }, Math.max(flight, PAPER_MIN_FLIGHT_MS)).unref()
     }
     const payload = JSON.stringify({ t: 'throw', from: player.id, nickname: player.nickname, to, x: round(x), z: round(z), ...(knock ? { knock: true } : {}) })
     for (const member of players.values()) {

@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useCheers } from '../data/cheers'
-import { EASEL_PALETTE } from '../data/easel'
+import { EASEL_PALETTE, type EaselSegment } from '../data/easel'
 import { usePresence } from '../data/presence'
 import { isImageUrlExpired, useExhibition, type GalleryWork } from '../data/galleryWorks'
 import { CRAB_GAME_WORK_ID } from '../data/paintingGames'
@@ -25,6 +25,7 @@ import { ChatPanel } from './ChatPanel'
 import { ControlsGuide, useControlsGuide } from './ControlsGuide'
 import { useDoorPrompt } from './DoorPrompt'
 import { CheerBoardModal } from './CheerBoardModal'
+import { EaselCanvasModal } from './EaselCanvasModal'
 import { EaselHud } from './EaselHud'
 import { GalleryHud } from './GalleryHud'
 import { HarudlePhoneModal } from './HarudlePhoneModal'
@@ -58,6 +59,9 @@ export function GallerySpace({ onExit }: { onExit: () => void }) {
   const [nearPainting, setNearPainting] = useState(false)
   const [easelNear, setEaselNear] = useState<EaselNear>({ brush: false, easel: false })
   const [easelColor, setEaselColor] = useState(1)
+  const [easelSize, setEaselSize] = useState(1)
+  const [easelOpen, setEaselOpen] = useState(false)
+  const droppingEasel = useRef(false)
 
   // 꾸미기를 마친 뒤에 입장해야 다른 방문자에게 완성된 모습으로 보인다.
   const {
@@ -72,6 +76,7 @@ export function GallerySpace({ onExit }: { onExit: () => void }) {
     play,
     hitNotice,
     easel,
+    easelArt,
     sendEasel,
     notify,
   } = usePresence(!firstVisit, avatar, settings.doodleFollows, room, nickname)
@@ -82,22 +87,38 @@ export function GallerySpace({ onExit }: { onExit: () => void }) {
     () =>
       others
         .filter((player) => player.room === room)
-        .map((player) => (player.id === easelHolder ? { ...player, avatar: { ...player.avatar, held: 'brush' as const, heldColor: EASEL_PALETTE[4] } } : player)),
+        .map((player) => (player.id === easelHolder ? { ...player, avatar: { ...player.avatar, held: 'brush' as const, heldColor: EASEL_PALETTE[7], easelBrush: true } } : player)),
     [others, room, easelHolder],
   )
   const shownAvatar = useMemo(
-    () => (holdingEaselBrush ? { ...avatar, held: 'brush' as const, heldColor: EASEL_PALETTE[easelColor] } : avatar),
+    () => (holdingEaselBrush ? { ...avatar, held: 'brush' as const, heldColor: EASEL_PALETTE[easelColor], easelBrush: true } : avatar),
     [avatar, holdingEaselBrush, easelColor],
   )
   const easelHolderName = others.find((player) => player.id === easelHolder)?.nickname ?? ''
   const pickEaselBrush = useCallback(() => sendEasel({ t: 'easel-pick' }), [sendEasel])
-  const fillEasel = useCallback((region: number) => sendEasel({ t: 'easel-fill', region, color: easelColor }), [sendEasel, easelColor])
+  const openEaselCanvas = useCallback(() => setEaselOpen(true), [])
+  const notifyEaselFull = useCallback(() => notify('종이가 가득 찼어요. 새 종이로 바꿔 주세요'), [notify])
+  const drawEasel = useCallback((segment: EaselSegment) => sendEasel({ t: 'easel-draw', ...segment }), [sendEasel])
+  const dropEaselBrush = () => {
+    droppingEasel.current = true
+    setEaselOpen(false)
+    sendEasel({ t: 'easel-drop' })
+  }
   // 붓을 주운 순간에 어떻게 쓰는지 알려 준다.
+  // 붓을 놓치면(종이에 맞았을 때 등) 그림판을 닫는다. 그리던 선은 그림판이 닫히며 마저 보내져 이젤에 남는다.
+  const wasHolding = useRef(false)
   useEffect(() => {
-    if (holdingEaselBrush) notify('붓을 주웠어요! 색을 고르고 이젤 그림을 눌러 칠해요')
+    if (holdingEaselBrush) {
+      notify('붓을 주웠어요! 이젤을 누르면 그림판이 열려요')
+    } else if (wasHolding.current) {
+      setEaselOpen(false)
+      if (!droppingEasel.current) notify('붓을 놓쳤어요! 그리던 그림은 이젤에 그대로 남아 있어요')
+    }
+    wasHolding.current = holdingEaselBrush
+    droppingEasel.current = false
   }, [holdingEaselBrush, notify])
   const clearEasel = () => {
-    if (window.confirm('함께 칠한 그림을 모두 지우고 새 종이로 바꿀까요?')) sendEasel({ t: 'easel-clear' })
+    if (window.confirm('다 같이 그린 그림을 모두 지우고 새 종이로 바꿀까요?')) sendEasel({ t: 'easel-clear' })
   }
 
   const zoneIndex = exhibition.zones.findIndex((zone) => zone.authorId === room)
@@ -216,7 +237,7 @@ export function GallerySpace({ onExit }: { onExit: () => void }) {
           showWaitingFrames={status !== 'ready'}
           overview={overview}
           jump={jump}
-          paused={Boolean(selected) || customizing || cheersOpen || boothOpen || phoneOpen || doorPromptOpen || paintingStage !== 'idle'}
+          paused={Boolean(selected) || customizing || cheersOpen || boothOpen || phoneOpen || easelOpen || doorPromptOpen || paintingStage !== 'idle'}
           onSelect={select}
           onDoor={requestDoor}
           joystick={joystick}
@@ -226,9 +247,10 @@ export function GallerySpace({ onExit }: { onExit: () => void }) {
           onOpenBooth={() => setBoothOpen(true)}
           onOpenPhone={() => setPhoneOpen(true)}
           easel={easel}
+          easelArt={easelArt}
           easelHolderName={easelHolderName}
           onEaselPick={pickEaselBrush}
-          onEaselFill={fillEasel}
+          onOpenEaselCanvas={openEaselCanvas}
           onEaselNear={setEaselNear}
           portalSlot={paintingSlot}
           diving={paintingStage === 'diving'}
@@ -279,17 +301,27 @@ export function GallerySpace({ onExit }: { onExit: () => void }) {
           holding={holdingEaselBrush}
           nearBrush={easelNear.brush}
           nearEasel={easelNear.easel}
-          color={easelColor}
-          onColorChange={setEaselColor}
           onPick={pickEaselBrush}
-          onDrop={() => sendEasel({ t: 'easel-drop' })}
-          onClear={clearEasel}
+          onOpenCanvas={openEaselCanvas}
+          onDrop={dropEaselBrush}
         />
       )}
+      <EaselCanvasModal
+        open={easelOpen && holdingEaselBrush}
+        art={easelArt}
+        color={easelColor}
+        size={easelSize}
+        onColorChange={setEaselColor}
+        onSizeChange={setEaselSize}
+        onDraw={drawEasel}
+        onFull={notifyEaselFull}
+        onClear={clearEasel}
+        onClose={() => setEaselOpen(false)}
+      />
       <TouchJoystick input={joystick} onUse={guide.dismissHint} />
       <ActionButtons controls={joystick} throwRequest={play.throwRequest} hitNotice={hitNotice} />
       <ChatPanel chat={chat} />
-      <ControlsGuide guide={guide} tip="액자를 누르면 크게 보고, 벤치에 앉을 수 있어요. 문으로 걸어가면 작가 전시실에 들어가요. 빛나는 그림 앞에서 점프하면 그림 속 게임을 할 수 있어요! 큰 휴대폰 화면을 눌러 하루들을 바로 써 보거나, 옆 받침대로 크게 열 수 있어요. 바닥의 붓을 주우면 이젤의 네컷만화를 함께 칠할 수 있어요." />
+      <ControlsGuide guide={guide} tip="액자를 누르면 크게 보고, 벤치에 앉을 수 있어요. 문으로 걸어가면 작가 전시실에 들어가요. 빛나는 그림 앞에서 점프하면 그림 속 게임을 할 수 있어요! 큰 휴대폰 화면을 눌러 하루들을 바로 써 보거나, 옆 받침대로 크게 열 수 있어요. 바닥의 붓을 주워 이젤을 누르면 네컷 그림판에 함께 그릴 수 있어요." />
       <ArtworkModal work={selected} onClose={closeWork} />
       <AuthorBoothModal open={boothOpen} onClose={() => setBoothOpen(false)} />
       <HarudlePhoneModal open={phoneOpen} onClose={() => setPhoneOpen(false)} />
