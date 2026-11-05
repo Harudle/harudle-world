@@ -4,12 +4,14 @@ import { Canvas, type ThreeEvent } from '@react-three/fiber'
 import * as THREE from 'three'
 import type { AvatarConfig } from '../../data/avatar'
 import type { Cheer } from '../../data/cheers'
+import type { EaselState } from '../../data/easel'
 import type { ArtistZone, GalleryWork } from '../../data/galleryWorks'
 import type { MoveUpdate, RemotePlayer, RemotePosition, SpeechMap, PlayState } from '../../data/presence'
 import { COLORS } from '../../lib/brand'
 import { Artwork } from './Artwork'
 import { PaintingPortal } from './PaintingPortal'
 import { AuthorBooth } from './AuthorBooth'
+import { EaselCorner, type EaselNear } from './EaselCorner'
 import { HarudlePhone } from './HarudlePhone'
 import { CheerStand } from './CheerStand'
 import { ArtistRoom, MainHall } from './Hall'
@@ -47,6 +49,11 @@ type GalleryCanvasProps = {
   onOpenCheers: () => void
   onOpenBooth: () => void
   onOpenPhone: () => void
+  easel: EaselState | null
+  easelHolderName: string
+  onEaselPick: () => void
+  onEaselFill: (region: number) => void
+  onEaselNear: (near: EaselNear) => void
   /** 뛰어들 수 있는 그림이 걸린 자리 */
   portalSlot: ArtSlot | null
   diving: boolean
@@ -88,6 +95,11 @@ export default function GalleryCanvas({
   onOpenCheers,
   onOpenBooth,
   onOpenPhone,
+  easel,
+  easelHolderName,
+  onEaselPick,
+  onEaselFill,
+  onEaselNear,
   portalSlot,
   diving,
   suspended,
@@ -110,6 +122,15 @@ export default function GalleryCanvas({
   const handleSit = useCallback((point: Seat) => {
     seatRequest.current = point
   }, [])
+
+  const walkTo = useCallback(
+    (x: number, z: number) => {
+      const target = new THREE.Vector3(x, 0, z)
+      resolveCollisions(target, space)
+      moveTarget.current = target
+    },
+    [space],
+  )
 
   const handleFloorClick = useCallback(
     (event: ThreeEvent<MouseEvent>) => {
@@ -184,6 +205,18 @@ export default function GalleryCanvas({
             <MainHall doors={doors} paused={paused} onFloorClick={handleFloorClick} onDoor={onDoor} onSit={handleSit} />
             <AuthorBooth paused={paused} onOpen={onOpenBooth} />
             <HarudlePhone paused={paused} onOpen={onOpenPhone} />
+            <EaselCorner
+              easel={easel}
+              myId={play.myId}
+              holderName={easelHolderName}
+              leader={leader}
+              paused={paused || overview}
+              onWalkTo={walkTo}
+              onPick={onEaselPick}
+              onFill={onEaselFill}
+              onNotify={play.notify}
+              onNearChange={onEaselNear}
+            />
           </>
         )}
         {slots.map((slot, index) => {

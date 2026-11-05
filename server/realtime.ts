@@ -1,6 +1,7 @@
 import type { Server } from 'node:http'
 import { WebSocketServer, type WebSocket } from 'ws'
 import type { ChatLog } from './chatLog.ts'
+import { createEasel } from './easel.ts'
 import { charLength, cleanText, LINK_PATTERN } from './cheers.ts'
 import { sanitizeAvatar, type AvatarConfig } from '../src/data/avatar.ts'
 import { BRUSH_REACH, MAX_SPACE_HALF_X, MAX_SPACE_HALF_Z } from '../src/scene/gallery/layout.ts'
@@ -35,6 +36,7 @@ const BRUSH_INTERVAL_MS = 500
 const BRUSH_REACH_SLACK = 1.5
 // 열려 있는 화면은 멈춰 있어도 1초마다 위치를 보낸다. 숨긴 탭은 보내지 않으므로 이만큼 지나면 세지 않는다.
 const LIVE_SIGNAL_MS = 3 * 60_000
+const EASEL_TICK_EVERY = 10
 const NON_VISITOR_AGENT = /bot|crawl|spider|headless|lighthouse|playwright|puppeteer|selenium/i
 
 /** 전시관이 가득 찼을 때의 종료 코드. 클라이언트는 이 코드면 재접속하지 않는다. */
@@ -122,6 +124,16 @@ export function attachRealtime(server: Server, { path, maxPlayers, isOriginAllow
 
   const send = (socket: WebSocket, payload: string) => {
     if (socket.readyState === socket.OPEN && socket.bufferedAmount < MAX_BUFFERED_BYTES) socket.send(payload)
+  }
+
+  const easel = createEasel((room, payload) => {
+    for (const member of players.values()) {
+      if (member.room === room) send(member.socket, payload)
+    }
+  })
+  const sendEasel = (player: Player) => {
+    const payload = easel.snapshotFor(player.room)
+    if (payload) send(player.socket, payload)
   }
 
   /** 접속이 몰려도 명단을 한 번만 보내도록 바뀐 방을 모아 두었다가 주기적으로 보낸다. */
@@ -319,7 +331,10 @@ export function attachRealtime(server: Server, { path, maxPlayers, isOriginAllow
       send(socket, JSON.stringify({ t: 'welcome', id }))
       markRoster(sanitizeRoom(message.room))
       const joined = players.get(socket)
-      if (joined) sendChatHistory(joined)
+      if (joined) {
+        sendChatHistory(joined)
+        sendEasel(joined)
+      }
       return
     }
 
@@ -350,6 +365,7 @@ export function attachRealtime(server: Server, { path, maxPlayers, isOriginAllow
       player.placed = true
       player.lastMoveAt = now
       positionsDirty.add(player.room)
+      easel.moved(player)
     } else if (message.t === 'avatar') {
       player.avatar = sanitizeAvatar(message.avatar)
       player.nickname = sanitizeNickname(message.nickname)
@@ -357,16 +373,20 @@ export function attachRealtime(server: Server, { path, maxPlayers, isOriginAllow
       markRoster(player.room)
     } else if (message.t === 'room') {
       markRoster(player.room)
+      easel.left(player)
       player.room = sanitizeRoom(message.room)
       player.placed = false
       markRoster(player.room)
       sendChatHistory(player)
+      sendEasel(player)
     } else if (message.t === 'chat') {
       handleChat(player, message.text, now)
     } else if (message.t === 'throw') {
       handleThrow(player, message, now)
     } else if (message.t === 'brush') {
       handleBrush(player, message.to, now)
+    } else if (typeof message.t === 'string' && message.t.startsWith('easel-')) {
+      if (!easel.handle(player, message, now)) sendEasel(player)
     } else if (message.t === 'mute' && typeof message.id === 'number' && player.mutedPlayers.size < MAX_MUTED_PLAYERS) {
       player.mutedPlayers.add(message.id)
     }
@@ -384,7 +404,10 @@ export function attachRealtime(server: Server, { path, maxPlayers, isOriginAllow
     socket.on('error', () => socket.terminate())
     socket.on('close', () => {
       const player = players.get(socket)
-      if (player && players.delete(socket)) markRoster(player.room)
+      if (player && players.delete(socket)) {
+        markRoster(player.room)
+        easel.left(player)
+      }
     })
   })
 
@@ -403,6 +426,7 @@ export function attachRealtime(server: Server, { path, maxPlayers, isOriginAllow
   const snapshotTimer = setInterval(() => {
     snapshotTick += 1
     if (snapshotTick % ROSTER_EVERY_TICKS === 0) flushRosters()
+    if (snapshotTick % EASEL_TICK_EVERY === 0) easel.tick(Date.now())
     if (positionsDirty.size === 0) return
 
     const rooms = new Map<string, Player[]>()

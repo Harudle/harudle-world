@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import { sanitizeAvatar, type AvatarConfig } from './avatar'
+import { isEaselState, type EaselState } from './easel'
 
 export type PresenceStatus = 'connecting' | 'online' | 'offline' | 'full'
 
@@ -65,6 +66,9 @@ export type PlayState = {
   notify: (text: string) => void
 }
 
+/** 이젤 붓 줍기, 내려놓기, 칸 칠하기, 새 종이 */
+export type EaselAction = { t: 'easel-pick' } | { t: 'easel-drop' } | { t: 'easel-fill'; region: number; color: number } | { t: 'easel-clear' }
+
 const MAX_FLYING_PAPERS = 40
 const MAX_CHAT_MESSAGES = 50
 const MAX_PAINT_MARKS = 6
@@ -97,6 +101,7 @@ export function usePresence(active: boolean, avatar: AvatarConfig, doodle: boole
   const [chatReject, setChatReject] = useState<{ reason: ChatReject; key: number } | null>(null)
   const [throws, setThrows] = useState<PaperThrow[]>([])
   const [hitNotice, setHitNotice] = useState<{ text: string; key: number } | null>(null)
+  const [easel, setEasel] = useState<EaselState | null>(null)
   const hits = useRef(new Map<number, number>())
   const knocks = useRef(new Map<number, number>())
   const swings = useRef(new Map<number, BrushSwing>())
@@ -159,7 +164,7 @@ export function usePresence(active: boolean, avatar: AvatarConfig, doodle: boole
       }
 
       socket.onmessage = (event) => {
-        let message: { t?: string; id?: number; total?: number; players?: unknown[]; nickname?: unknown; text?: unknown; reason?: ChatReject; from?: unknown; to?: unknown; x?: unknown; z?: unknown; knock?: unknown; color?: unknown; items?: { id?: unknown; nickname?: unknown; text?: unknown; at?: unknown }[] }
+        let message: { t?: string; holder?: unknown; fills?: unknown; id?: number; total?: number; players?: unknown[]; nickname?: unknown; text?: unknown; reason?: ChatReject; from?: unknown; to?: unknown; x?: unknown; z?: unknown; knock?: unknown; color?: unknown; items?: { id?: unknown; nickname?: unknown; text?: unknown; at?: unknown }[] }
         try {
           message = JSON.parse(event.data)
         } catch {
@@ -209,6 +214,9 @@ export function usePresence(active: boolean, avatar: AvatarConfig, doodle: boole
             chatKey.current += 1
             setHitNotice({ text: `${typeof message.nickname === 'string' && message.nickname ? message.nickname : '누군가'}님이 붓으로 칠했어요!`, key: chatKey.current })
           }
+        } else if (message.t === 'easel') {
+          const { t: _type, ...state } = message
+          if (isEaselState(state)) setEasel({ holder: state.holder, x: state.x, z: state.z, fills: state.fills })
         } else if (message.t === 'chat-reject' && message.reason) {
           chatKey.current += 1
           setChatReject({ reason: message.reason, key: chatKey.current })
@@ -247,6 +255,7 @@ export function usePresence(active: boolean, avatar: AvatarConfig, doodle: boole
         positions.current.clear()
         setOthers([])
         setTotal(1)
+        setEasel(null)
         if (stopped) return
         if (event.code === CLOSE_FULL) {
           setStatus('full')
@@ -285,6 +294,8 @@ export function usePresence(active: boolean, avatar: AvatarConfig, doodle: boole
     setMessages([])
     setSpeech({})
     setThrows([])
+    // 이젤 방에 다시 들어오면 서버가 지금 상태를 보내 준다.
+    setEasel(null)
   }, [room])
 
   const sendMove = useCallback(({ x, z, heading, moving, seated, jumping }: MoveUpdate) => {
@@ -320,6 +331,16 @@ export function usePresence(active: boolean, avatar: AvatarConfig, doodle: boole
     if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ t: 'brush', to }))
   }, [])
 
+  /** 칠하기는 서버 답을 기다리지 않고 내 화면에 먼저 칠한다. 서버가 거절하면 지금 상태를 다시 보내 준다. */
+  const sendEasel = useCallback((action: EaselAction) => {
+    const socket = socketRef.current
+    if (socket?.readyState !== WebSocket.OPEN) return
+    socket.send(JSON.stringify(action))
+    if (action.t === 'easel-fill') {
+      setEasel((current) => current && { ...current, fills: current.fills.map((fill, index) => (index === action.region ? action.color : fill)) })
+    }
+  }, [])
+
   /** 종이가 도착하면 목록에서 빼고, 맞은 사람을 표시한다. */
   const finishThrow = useCallback((paper: PaperThrow) => {
     setThrows((current) => current.filter((candidate) => candidate.key !== paper.key))
@@ -339,5 +360,5 @@ export function usePresence(active: boolean, avatar: AvatarConfig, doodle: boole
 
   const chat = { status, messages, reject: chatReject, send: sendChat, mute: muteChat }
 
-  return { status, others, total, positions, sendMove, chat, speech, mySpeech: myId === null ? '' : (speech[myId] ?? ''), play, hitNotice }
+  return { status, others, total, positions, sendMove, chat, speech, mySpeech: myId === null ? '' : (speech[myId] ?? ''), play, hitNotice, easel, sendEasel, notify }
 }
