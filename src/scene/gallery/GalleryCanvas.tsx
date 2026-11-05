@@ -46,7 +46,6 @@ type GalleryCanvasProps = {
   cheerCount: number
   onOpenCheers: () => void
   onOpenBooth: () => void
-  onOpenPhone: () => void
   /** 뛰어들 수 있는 그림이 걸린 자리 */
   portalSlot: ArtSlot | null
   diving: boolean
@@ -87,7 +86,6 @@ export default function GalleryCanvas({
   cheerCount,
   onOpenCheers,
   onOpenBooth,
-  onOpenPhone,
   portalSlot,
   diving,
   suspended,
@@ -123,7 +121,9 @@ export default function GalleryCanvas({
 
   return (
     <Canvas
-      className="!absolute inset-0"
+      // 휴대폰 화면(웹 페이지)이 캔버스 뒤에 깔리므로, 그 순서가 HUD 위로 새어 나가지 않게 따로 쌓는다.
+      className="!absolute inset-0 isolate"
+      data-scene=""
       frameloop={suspended ? 'never' : 'always'}
       shadows={{ type: THREE.PCFShadowMap }}
       flat
@@ -181,7 +181,7 @@ export default function GalleryCanvas({
           <>
             <MainHall doors={doors} paused={paused} onFloorClick={handleFloorClick} onDoor={onDoor} onSit={handleSit} />
             <AuthorBooth paused={paused} onOpen={onOpenBooth} />
-            <HarudlePhone paused={paused} onOpen={onOpenPhone} />
+            <HarudlePhone />
           </>
         )}
         {slots.map((slot, index) => {

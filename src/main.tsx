@@ -4,6 +4,7 @@ import '@fontsource/jua/400.css'
 import '@fontsource/gowun-dodum/400.css'
 import './index.css'
 import { App } from './App'
+import { sceneCanvasOf } from './scene/WebScreen'
 
 const root = document.getElementById('root')!
 
@@ -11,7 +12,7 @@ const root = document.getElementById('root')!
 // 시점이 튀어 위에서 내려다보게 되므로, 3D 화면 밖의 터치는 여기서 멈춘다. React는 이 요소에서 듣기 때문에 그대로 받는다.
 for (const type of ['pointermove', 'pointerup', 'pointercancel'] as const) {
   root.addEventListener(type, (event) => {
-    if (event.pointerType === 'touch' && !(event.target instanceof HTMLCanvasElement)) event.stopPropagation()
+    if (event.pointerType === 'touch' && !sceneCanvasOf(event.target)) event.stopPropagation()
   })
 }
 

@@ -1,5 +1,6 @@
 import { useEffect, useId, useState } from 'react'
 import { HARUDLE_URL } from '../lib/brand'
+import { HarudleFrame } from './HarudleFrame'
 import { useModalDialog } from './useModalDialog'
 
 type HarudlePhoneModalProps = {
@@ -8,8 +9,8 @@ type HarudlePhoneModalProps = {
 }
 
 /**
- * 전시관의 큰 휴대폰을 누르면 하루들을 휴대폰 화면 크기로 띄운다.
- * 하루들이 frame-ancestors로 이 사이트를 허용해야 보이므로, 막혀 있을 때를 위해 새 창 열기를 늘 함께 둔다.
+ * 전시관 휴대폰 화면이 작게 보일 때 하루들을 휴대폰 화면 크기로 크게 띄운다.
+ * 하루들이 막혀 있을 때를 위해 새 창 열기를 늘 함께 둔다.
  */
 export function HarudlePhoneModal({ open, onClose }: HarudlePhoneModalProps) {
   const { dialogRef, contentRef } = useModalDialog(open)
@@ -59,17 +60,7 @@ export function HarudlePhoneModal({ open, onClose }: HarudlePhoneModalProps) {
             <br />
             화면이 계속 비어 있으면 위의 ‘새 창으로’를 눌러 주세요.
           </p>
-          {loaded && (
-            <iframe
-              src={HARUDLE_URL}
-              title="하루들 서비스 화면"
-              // 하루들이 전시관 전체 화면을 다른 주소로 바꾸지 못하게 막고, 로그인 같은 새 창은 열 수 있게 둔다.
-              sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-downloads"
-              allow="clipboard-write"
-              referrerPolicy="strict-origin-when-cross-origin"
-              className="relative size-full border-0 bg-transparent"
-            />
-          )}
+          {loaded && <HarudleFrame className="relative size-full border-0 bg-transparent" />}
         </div>
       </section>
     </dialog>

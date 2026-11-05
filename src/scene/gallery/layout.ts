@@ -113,7 +113,7 @@ export const MAIN_SPACE: SpaceBounds = {
     ...BENCHES.map((bench) => ({ x: bench.x, z: bench.z, radius: 1.3 })),
     ...TREES.map((tree) => ({ x: tree.x, z: tree.z, radius: 0.6 })),
     { x: BOOTH_POSITION[0], z: BOOTH_POSITION[2], radius: 2.7 },
-    { x: PHONE_POSITION[0], z: PHONE_POSITION[2], radius: 1.4 },
+    { x: PHONE_POSITION[0], z: PHONE_POSITION[2], radius: 1.6 },
   ],
   seats: benchSeats(BENCHES),
 }

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useState, type ButtonHTMLAttributes, type RefObject } from 'react'
 import type { ThrowRequest } from '../data/presence'
 import type { JoystickInput } from '../scene/gallery/Player'
+import { sceneCanvasOf } from '../scene/WebScreen'
 
 const NOTICE_SECONDS = 2.5
 const FOOTER_GAP = 10
@@ -74,8 +75,8 @@ function useAimTouch(aiming: boolean, onAim: (point: { x: number; y: number }) =
   useEffect(() => {
     if (!aiming) return
     const handlePointerDown = (event: PointerEvent) => {
-      const canvas = event.target
-      if (!(canvas instanceof HTMLCanvasElement)) return
+      const canvas = sceneCanvasOf(event.target)
+      if (!canvas) return
       event.stopPropagation()
       event.preventDefault()
       const swallowClick = (click: MouseEvent) => click.stopPropagation()

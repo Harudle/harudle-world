@@ -66,6 +66,12 @@ src/
 
 메인 전시실의 부스나 "작가 체험" 버튼을 누르면 하루들에 게시한 만화가 전시관에 걸리는 과정을 안내하고, 그 아래 버튼으로 `https://www.harudle.com/login`을 새 탭으로 엽니다. 전시관은 인기순 피드 최대 300점에서 작품을 고르므로, 메인 전시실과 작가 방에는 그중 인기 있는 작품과 작가가 걸립니다.
 
+## 하루들 휴대폰
+
+메인 전시실 카펫 오른쪽의 큰 휴대폰 화면에 `https://www.harudle.com`이 그대로 떠 있어서, 걸어가서 화면을 누르고 스크롤하며 하루들을 쓸 수 있습니다. 웹 페이지는 three의 `CSS3DRenderer`로 캔버스 뒤에 깔고 화면 자리만 캔버스를 투명하게 뚫어 보여 줍니다(`src/scene/WebScreen.tsx`). 그래서 캔버스는 마우스를 받지 않고 바깥 상자(`data-scene`)가 3D 화면의 입력을 받습니다. 화면이 작게 보이면 "하루들 열기" 버튼으로 휴대폰 크기 창을 엽니다.
+
+하루들이 `X-Frame-Options: DENY`를 보내는 동안에는 화면이 비어 보입니다. 하루들 쪽에서 이 헤더 대신 `Content-Security-Policy: frame-ancestors 'self' https://world.harudle.com`을 보내야 합니다.
+
 ## 아바타
 
 처음 전시관에 들어오면 꾸미기 화면이 뜨고, 결과는 브라우저 `localStorage`에 저장됩니다. 옵션은 `data/avatar.ts`, 모양은 `scene/Avatar.tsx`에 추가합니다.
