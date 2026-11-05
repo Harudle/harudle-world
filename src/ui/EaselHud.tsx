@@ -20,6 +20,7 @@ export function EaselHud({ holding, nearBrush, nearEasel, onPick, onOpenCanvas, 
       {!holding && (
         <button type="button" onClick={onPick} className={`${PILL} bg-butter`}>
           🖌️ 이젤 붓 줍기
+          <span className="pointer-coarse:hidden"> (Space)</span>
         </button>
       )}
       {holding && (

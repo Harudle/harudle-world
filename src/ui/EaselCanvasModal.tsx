@@ -46,6 +46,36 @@ export function EaselCanvasModal({ open, art, color, size, onColorChange, onSize
   const drawing = useRef<{ pointerId: number } | null>(null)
   const brush = useRef({ color, size })
   brush.current = { color, size }
+  /** 붓 굵기만 한 동그라미. 마우스를 따라다니며 어디에 얼마나 굵게 그려질지 미리 보여 준다. */
+  const preview = useRef<HTMLDivElement>(null)
+  const pointer = useRef<{ x: number; y: number } | null>(null)
+
+  const placePreview = useCallback(() => {
+    const circle = preview.current
+    const canvas = paper.current
+    if (!circle || !canvas) return
+    if (!pointer.current) {
+      circle.style.display = 'none'
+      return
+    }
+    const diameter = Math.max(4, (EASEL_SIZES[brush.current.size] / EASEL_SCALE) * canvas.getBoundingClientRect().width)
+    circle.style.display = 'block'
+    circle.style.width = `${diameter}px`
+    circle.style.height = `${diameter}px`
+    circle.style.backgroundColor = `${EASEL_PALETTE[brush.current.color]}99`
+    circle.style.transform = `translate(${pointer.current.x - diameter / 2}px, ${pointer.current.y - diameter / 2}px)`
+  }, [])
+
+  const trackPointer = (event: ReactPointerEvent<HTMLCanvasElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect()
+    pointer.current = { x: event.clientX - rect.left, y: event.clientY - rect.top }
+    placePreview()
+  }
+
+  // 색이나 굵기를 바꾸면 그 자리의 동그라미도 바로 바뀐다.
+  useEffect(() => {
+    placePreview()
+  }, [color, size, placePreview])
   // 부모가 다시 그려져 함수가 바뀌어도 그리던 선이 끊기지 않도록 ref로 들고 있는다.
   const callbacks = useRef({ onDraw, onFull })
   callbacks.current = { onDraw, onFull }
@@ -131,6 +161,7 @@ export function EaselCanvasModal({ open, art, color, size, onColorChange, onSize
   }
 
   const handlePointerDown = (event: ReactPointerEvent<HTMLCanvasElement>) => {
+    trackPointer(event)
     if (drawing.current || event.button > 0) return
     // 캔버스 밖으로 나가도 선이 이어지도록 잡아 둔다. 잡을 수 없는 포인터여도 그리기는 이어간다.
     try {
@@ -147,15 +178,23 @@ export function EaselCanvasModal({ open, art, color, size, onColorChange, onSize
   }
 
   const handlePointerMove = (event: ReactPointerEvent<HTMLCanvasElement>) => {
+    trackPointer(event)
     if (drawing.current?.pointerId !== event.pointerId) return
     const events = event.nativeEvent.getCoalescedEvents?.() ?? [event.nativeEvent]
     for (const item of events.length > 0 ? events : [event.nativeEvent]) extend(toPoint(item))
   }
 
   const handlePointerEnd = (event: ReactPointerEvent<HTMLCanvasElement>) => {
+    // 손가락은 떼면 가리킨 곳이 없으므로 동그라미를 숨긴다.
+    if (event.pointerType !== 'mouse') hidePreview()
     if (drawing.current?.pointerId !== event.pointerId) return
     flush(true)
     drawing.current = null
+  }
+
+  const hidePreview = () => {
+    pointer.current = null
+    placePreview()
   }
 
   return (
@@ -188,13 +227,19 @@ export function EaselCanvasModal({ open, art, color, size, onColorChange, onSize
             width={CANVAS_PIXELS}
             height={CANVAS_PIXELS}
             aria-label="네컷 그림판. 끌어서 그려요."
-            className="absolute inset-0 size-full cursor-crosshair"
+            className="absolute inset-0 size-full cursor-none"
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerEnd}
             onPointerCancel={handlePointerEnd}
+            onPointerLeave={hidePreview}
           />
           <canvas ref={frame} width={CANVAS_PIXELS} height={CANVAS_PIXELS} aria-hidden="true" className="pointer-events-none absolute inset-0 size-full" />
+          <div
+            ref={preview}
+            aria-hidden="true"
+            className="pointer-events-none absolute top-0 left-0 hidden rounded-full border-2 border-ink/70 shadow-[0_0_0_1px_white]"
+          />
         </div>
 
         <div className="flex flex-wrap items-center justify-center gap-2">

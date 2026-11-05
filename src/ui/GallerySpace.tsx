@@ -117,6 +117,23 @@ export function GallerySpace({ onExit }: { onExit: () => void }) {
     wasHolding.current = holdingEaselBrush
     droppingEasel.current = false
   }, [holdingEaselBrush, notify])
+  // 바닥의 붓 가까이에 서 있으면 스페이스로 줍는다. 점프보다 먼저 받아서 그 자리에서 뛰지 않게 한다.
+  const canPickWithSpace = room === MAIN_ROOM && !overview && easelNear.brush && !holdingEaselBrush
+  useEffect(() => {
+    if (!canPickWithSpace) return
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.code !== 'Space' || event.repeat || document.querySelector('dialog[open]')) return
+      const target = event.target
+      if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) return
+      // 키보드로 버튼을 골라 둔 때는 그 버튼을 누르게 둔다.
+      if (target instanceof HTMLElement && target !== document.body && target.tagName !== 'CANVAS' && target.matches(':focus-visible')) return
+      event.preventDefault()
+      event.stopPropagation()
+      pickEaselBrush()
+    }
+    window.addEventListener('keydown', handleKey, { capture: true })
+    return () => window.removeEventListener('keydown', handleKey, { capture: true })
+  }, [canPickWithSpace, pickEaselBrush])
   const clearEasel = () => {
     if (window.confirm('다 같이 그린 그림을 모두 지우고 새 종이로 바꿀까요?')) sendEasel({ t: 'easel-clear' })
   }
@@ -321,7 +338,7 @@ export function GallerySpace({ onExit }: { onExit: () => void }) {
       <TouchJoystick input={joystick} onUse={guide.dismissHint} />
       <ActionButtons controls={joystick} throwRequest={play.throwRequest} hitNotice={hitNotice} />
       <ChatPanel chat={chat} />
-      <ControlsGuide guide={guide} tip="액자를 누르면 크게 보고, 벤치에 앉을 수 있어요. 문으로 걸어가면 작가 전시실에 들어가요. 빛나는 그림 앞에서 점프하면 그림 속 게임을 할 수 있어요! 큰 휴대폰 화면을 눌러 하루들을 바로 써 보거나, 옆 받침대로 크게 열 수 있어요. 바닥의 붓을 주워 이젤을 누르면 네컷 그림판에 함께 그릴 수 있어요." />
+      <ControlsGuide guide={guide} tip="액자를 누르면 크게 보고, 벤치에 앉을 수 있어요. 문으로 걸어가면 작가 전시실에 들어가요. 빛나는 그림 앞에서 점프하면 그림 속 게임을 할 수 있어요! 큰 휴대폰 화면을 눌러 하루들을 바로 써 보거나, 옆 받침대로 크게 열 수 있어요. 바닥의 붓 가까이에서 스페이스로 붓을 줍고 이젤을 누르면 네컷 그림판에 함께 그릴 수 있어요." />
       <ArtworkModal work={selected} onClose={closeWork} />
       <AuthorBoothModal open={boothOpen} onClose={() => setBoothOpen(false)} />
       <HarudlePhoneModal open={phoneOpen} onClose={() => setPhoneOpen(false)} />
