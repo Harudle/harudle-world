@@ -17,11 +17,12 @@ type WebScreenProps = Omit<ThreeElements['group'], 'children'> & {
 
 type Layer = { renderer: CSS3DRenderer; scene: THREE.Scene; object: CSS3DObject; root: Root }
 
-/** 3D 화면을 누른 것인지. 웹 화면을 둔 3D 화면은 캔버스 대신 그 바깥 상자(data-scene)가 터치를 받는다. */
+/** 3D 화면을 누른 것인지. 웹 화면을 둔 3D 화면은 캔버스 대신 바깥 상자(data-scene)나 캔버스를 바로 감싼 상자가 터치를 받는다. */
 export function sceneCanvasOf(target: EventTarget | null): HTMLCanvasElement | null {
   if (target instanceof HTMLCanvasElement) return target
-  if (target instanceof HTMLElement && target.dataset.scene !== undefined) return target.querySelector('canvas')
-  return null
+  if (!(target instanceof HTMLElement)) return null
+  const insideScene = target.dataset.scene !== undefined || target.parentElement?.dataset.scene !== undefined
+  return insideScene ? target.querySelector('canvas') : null
 }
 
 /**
