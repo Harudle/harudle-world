@@ -158,6 +158,7 @@ export function PaperThrows({ players, positions, leader, play, paused, space }:
   const cooldown = useRef(0)
   const marker = useRef<THREE.Mesh>(null)
   const gl = useThree((state) => state.gl)
+  const host = useThree((state) => state.events.connected as HTMLElement | undefined)
   const scratch = useMemo(
     () => ({ raycaster: new THREE.Raycaster(), projected: new THREE.Vector3(), ground: new THREE.Vector3(), ndc: new THREE.Vector2() }),
     [],
@@ -174,17 +175,18 @@ export function PaperThrows({ players, positions, leader, play, paused, space }:
     return () => window.removeEventListener('keydown', handleKey)
   }, [throwRequest])
 
-  // 마우스만으로도 던질 수 있게 우클릭은 그 자리로 던진다.
+  // 마우스만으로도 던질 수 있게 우클릭은 그 자리로 던진다. 웹 화면이 있는 방에서는 캔버스가 입력을 받지 않으므로 바깥 상자에서 듣는다.
   useEffect(() => {
     const canvas = gl.domElement
+    const listener = host ?? canvas
     const handleContextMenu = (event: MouseEvent) => {
       event.preventDefault()
       const rect = canvas.getBoundingClientRect()
       throwRequest.current = { point: { x: ((event.clientX - rect.left) / rect.width) * 2 - 1, y: -((event.clientY - rect.top) / rect.height) * 2 + 1 } }
     }
-    canvas.addEventListener('contextmenu', handleContextMenu)
-    return () => canvas.removeEventListener('contextmenu', handleContextMenu)
-  }, [gl, throwRequest])
+    listener.addEventListener('contextmenu', handleContextMenu)
+    return () => listener.removeEventListener('contextmenu', handleContextMenu)
+  }, [gl, host, throwRequest])
 
   useFrame(({ camera, pointer, size }, delta) => {
     const { raycaster, projected, ground, ndc } = scratch

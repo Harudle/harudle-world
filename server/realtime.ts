@@ -37,6 +37,8 @@ const BRUSH_REACH_SLACK = 1.5
 // 열려 있는 화면은 멈춰 있어도 1초마다 위치를 보낸다. 숨긴 탭은 보내지 않으므로 이만큼 지나면 세지 않는다.
 const LIVE_SIGNAL_MS = 3 * 60_000
 const EASEL_TICK_EVERY = 10
+// 거절한 그리기에 그림 전체를 다시 보내는 간격. 그림이 커도 거절 메시지 하나로 서버 전송량이 크게 늘지 않게 한다.
+const EASEL_RESYNC_INTERVAL_MS = 2_000
 const NON_VISITOR_AGENT = /bot|crawl|spider|headless|lighthouse|playwright|puppeteer|selenium/i
 
 /** 전시관이 가득 찼을 때의 종료 코드. 클라이언트는 이 코드면 재접속하지 않는다. */
@@ -79,6 +81,7 @@ type Player = {
   hitCount: number
   knockImmuneUntil: number
   lastBrushAt: number
+  lastEaselResyncAt: number
   mutedPlayers: Set<number>
 }
 
@@ -333,6 +336,7 @@ export function attachRealtime(server: Server, { path, maxPlayers, isOriginAllow
         hitCount: 0,
         knockImmuneUntil: 0,
         lastBrushAt: 0,
+        lastEaselResyncAt: 0,
         mutedPlayers: new Set(),
       })
       send(socket, JSON.stringify({ t: 'welcome', id }))
@@ -393,7 +397,10 @@ export function attachRealtime(server: Server, { path, maxPlayers, isOriginAllow
     } else if (message.t === 'brush') {
       handleBrush(player, message.to, now)
     } else if (typeof message.t === 'string' && message.t.startsWith('easel-')) {
-      if (!easel.handle(player, message, now)) sendEasel(player)
+      if (!easel.handle(player, message, now) && now - player.lastEaselResyncAt >= EASEL_RESYNC_INTERVAL_MS) {
+        player.lastEaselResyncAt = now
+        sendEasel(player)
+      }
     } else if (message.t === 'mute' && typeof message.id === 'number' && player.mutedPlayers.size < MAX_MUTED_PLAYERS) {
       player.mutedPlayers.add(message.id)
     }
