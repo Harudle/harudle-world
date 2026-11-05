@@ -1,5 +1,6 @@
 name: 검사
 
+# PR을 합치기 전에 타입과 빌드를 확인한다. main 보호 규칙의 필수 검사다.
 on:
   pull_request:
 
