@@ -116,12 +116,12 @@ function phoneLocalToWorld([x, , z]: [number, number, number]) {
 }
 const PHONE_KIOSK = phoneLocalToWorld(PHONE_KIOSK_OFFSET)
 
-/** 함께 색칠하는 네컷만화 이젤. 입구 쪽에서 잘 보이게 카펫 오른쪽 앞에 비스듬히 세운다. */
-export const EASEL_POSITION: [number, number, number] = [4.4, 0, 7.4]
-export const EASEL_ROTATION_Y = -0.35
-/** 이젤 붓이 처음 놓여 있는 바닥 자리 */
-export const EASEL_BRUSH_HOME = { x: 2.7, z: 8.8 }
-/** 이젤 붓을 주울 수 있는 거리와 이젤에 칠할 수 있는 거리. 서버도 같은 값으로 확인한다. */
+/** 함께 그리는 네컷 이젤. 카펫 왼쪽 앞 벤치 옆에 세우고, 카펫과 입구 쪽을 보도록 비스듬히 돌린다. */
+export const EASEL_POSITION: [number, number, number] = [-5.2, 0, 7.2]
+export const EASEL_ROTATION_Y = 0.35
+/** 이젤 붓이 처음 놓여 있는 바닥 자리. 이젤 앞 카펫 쪽이다. */
+export const EASEL_BRUSH_HOME = { x: -3.4, z: 8.8 }
+/** 이젤 붓을 주울 수 있는 거리와 이젤에서 그릴 수 있는 거리. 서버도 같은 값으로 확인한다. */
 export const EASEL_PICK_REACH = 1.8
 export const EASEL_PAINT_REACH = 3.4
 
