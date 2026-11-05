@@ -4,6 +4,7 @@ import type { ChatLog } from './chatLog.ts'
 import { createEasel } from './easel.ts'
 import { charLength, cleanText, LINK_PATTERN } from './cheers.ts'
 import { sanitizeAvatar, type AvatarConfig } from '../src/data/avatar.ts'
+import { isEmote } from '../src/data/emotes.ts'
 import { BRUSH_REACH, MAX_SPACE_HALF_X, MAX_SPACE_HALF_Z } from '../src/scene/gallery/layout.ts'
 
 const SNAPSHOT_INTERVAL_MS = 100
@@ -25,13 +26,14 @@ const KNOCK_HITS = 1
 const KNOCK_HIT_WINDOW_MS = 10_000
 // 쓰러져 있는 3.3초에 더해, 일어난 뒤 곧바로 다시 쓰러뜨려 괴롭힐 수 없게 쉬는 시간을 둔다.
 const KNOCK_IMMUNE_MS = 8_000
-// 바닥으로 던진 종이가 이 거리 안의 사람에게 맞는다. 클라이언트의 비행 속도와 맞춘다.
+// 던진 종이가 이 거리 안의 사람에게 맞는다. 클라이언트의 비행 속도와 맞춘다.
 const PAPER_HIT_RADIUS = 1
 const PAPER_FLIGHT_SPEED = 16
 const PAPER_MIN_FLIGHT_MS = 250
 const PAPER_DROP_HEIGHT = 1.34
 const MAX_MUTED_PLAYERS = 200
 const BRUSH_INTERVAL_MS = 500
+const EMOTE_INTERVAL_MS = 1_000
 // 화면의 위치는 서버보다 조금 늦으므로 닿는 거리에 여유를 둔다.
 const BRUSH_REACH_SLACK = 1.5
 // 열려 있는 화면은 멈춰 있어도 1초마다 위치를 보낸다. 숨긴 탭은 보내지 않으므로 이만큼 지나면 세지 않는다.
@@ -67,6 +69,7 @@ type Player = {
   moving: boolean
   seated: boolean
   jumping: boolean
+  doubleJumped: boolean
   placed: boolean
   alive: boolean
   browser: boolean
@@ -81,6 +84,7 @@ type Player = {
   hitCount: number
   knockImmuneUntil: number
   lastBrushAt: number
+  lastEmoteAt: number
   lastEaselResyncAt: number
   mutedPlayers: Set<number>
 }
@@ -212,7 +216,7 @@ export function attachRealtime(server: Server, { path, maxPlayers, isOriginAllow
     return true
   }
 
-  /** 바닥으로 던진 종이가 도착할 때 그 자리에 있는 사람을 맞힌다. 그 사이 비켜나면 피할 수 있다. */
+  /** 종이가 도착할 때 그 자리에 있는 사람을 맞힌다. 그 사이 비켜나면 피할 수 있다. */
   const landPaper = (thrower: Player, x: number, z: number, flightMs: number) => {
     const timer = setTimeout(() => {
       if (!players.has(thrower.socket)) return
@@ -237,7 +241,7 @@ export function attachRealtime(server: Server, { path, maxPlayers, isOriginAllow
     timer.unref()
   }
 
-  /** 상대를 겨냥하면 to, 빈 곳이면 x, z로 떨어질 자리를 보낸다. 같은 방 사람만 겨냥할 수 있다. */
+  /** 겨냥한 x, z 자리로 던진다. 사람을 따라가지 않으므로 맞았는지는 도착할 때 정한다. */
   const handleThrow = (player: Player, message: Record<string, unknown>, now: number) => {
     if (now - player.throwWindowStart >= THROW_WINDOW_MS) {
       player.throwWindowStart = now
@@ -245,32 +249,14 @@ export function attachRealtime(server: Server, { path, maxPlayers, isOriginAllow
     }
     if (player.throwCount >= MAX_THROWS_PER_WINDOW) return
 
-    let target: Player | null = null
-    if (typeof message.to === 'number') {
-      for (const member of players.values()) {
-        if (member.id === message.to && member.room === player.room && member !== player) target = member
-      }
-      if (!target) return
-    }
-    const to = target?.id ?? null
-    const x = to === null ? clampNumber(message.x, -MAX_SPACE_HALF_X, MAX_SPACE_HALF_X) : 0
-    const z = to === null ? clampNumber(message.z, -MAX_SPACE_HALF_Z, MAX_SPACE_HALF_Z) : 0
+    const x = clampNumber(message.x, -MAX_SPACE_HALF_X, MAX_SPACE_HALF_X)
+    const z = clampNumber(message.z, -MAX_SPACE_HALF_Z, MAX_SPACE_HALF_Z)
     if (x === null || z === null) return
 
     player.throwCount += 1
-    const knock = target !== null && countHit(target, player, now)
-    if (target === null) {
-      const flight = (Math.hypot(x - player.x, z - player.z, PAPER_DROP_HEIGHT) / PAPER_FLIGHT_SPEED) * 1000
-      landPaper(player, x, z, Math.max(flight, PAPER_MIN_FLIGHT_MS))
-    } else if (!target.mutedPlayers.has(player.id)) {
-      // 겨냥한 종이는 늘 맞는다. 이젤 붓을 들고 있었다면 종이가 닿을 때 떨어뜨린다.
-      const struck = target
-      const flight = (Math.hypot(struck.x - player.x, struck.z - player.z) / PAPER_FLIGHT_SPEED) * 1000
-      setTimeout(() => {
-        if (players.has(struck.socket)) easel.hit(struck, Date.now())
-      }, Math.max(flight, PAPER_MIN_FLIGHT_MS)).unref()
-    }
-    const payload = JSON.stringify({ t: 'throw', from: player.id, nickname: player.nickname, to, x: round(x), z: round(z), ...(knock ? { knock: true } : {}) })
+    const flight = (Math.hypot(x - player.x, z - player.z, PAPER_DROP_HEIGHT) / PAPER_FLIGHT_SPEED) * 1000
+    landPaper(player, x, z, Math.max(flight, PAPER_MIN_FLIGHT_MS))
+    const payload = JSON.stringify({ t: 'throw', from: player.id, nickname: player.nickname, x: round(x), z: round(z) })
     for (const member of players.values()) {
       if (member.room === player.room) send(member.socket, payload)
     }
@@ -322,6 +308,7 @@ export function attachRealtime(server: Server, { path, maxPlayers, isOriginAllow
         moving: false,
         seated: false,
         jumping: false,
+        doubleJumped: false,
         placed: false,
         alive: true,
         browser,
@@ -336,6 +323,7 @@ export function attachRealtime(server: Server, { path, maxPlayers, isOriginAllow
         hitCount: 0,
         knockImmuneUntil: 0,
         lastBrushAt: 0,
+        lastEmoteAt: 0,
         lastEaselResyncAt: 0,
         mutedPlayers: new Set(),
       })
@@ -373,6 +361,7 @@ export function attachRealtime(server: Server, { path, maxPlayers, isOriginAllow
       player.moving = message.m === true
       player.seated = message.s === true
       player.jumping = message.j === true
+      player.doubleJumped = message.d === true
       player.placed = true
       player.lastMoveAt = now
       positionsDirty.add(player.room)
@@ -396,6 +385,13 @@ export function attachRealtime(server: Server, { path, maxPlayers, isOriginAllow
       handleThrow(player, message, now)
     } else if (message.t === 'brush') {
       handleBrush(player, message.to, now)
+    } else if (message.t === 'emote') {
+      if (!isEmote(message.emote) || now - player.lastEmoteAt < EMOTE_INTERVAL_MS) return
+      player.lastEmoteAt = now
+      const payload = JSON.stringify({ t: 'emote', from: player.id, emote: message.emote })
+      for (const member of players.values()) {
+        if (member.room === player.room) send(member.socket, payload)
+      }
     } else if (typeof message.t === 'string' && message.t.startsWith('easel-')) {
       if (!easel.handle(player, message, now) && now - player.lastEaselResyncAt >= EASEL_RESYNC_INTERVAL_MS) {
         player.lastEaselResyncAt = now
@@ -462,7 +458,7 @@ export function attachRealtime(server: Server, { path, maxPlayers, isOriginAllow
         t: 'snapshot',
         players: members
           .filter((player) => player.placed)
-          .map(({ id, x, z, heading, moving, seated, jumping }) => ({ id, x: round(x), z: round(z), h: round(heading), m: moving, s: seated, ...(jumping ? { j: true } : {}) })),
+          .map(({ id, x, z, heading, moving, seated, jumping, doubleJumped }) => ({ id, x: round(x), z: round(z), h: round(heading), m: moving, s: seated, ...(jumping ? { j: true } : {}), ...(doubleJumped ? { d: true } : {}) })),
       })
       for (const member of members) send(member.socket, payload)
     }

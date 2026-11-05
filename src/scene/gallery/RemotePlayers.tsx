@@ -8,6 +8,7 @@ import type { WalkMotion } from '../Characters'
 import { Toon } from '../toon'
 import type { SpaceBounds } from './layout'
 import { NameTag } from './NameTag'
+import { EmoteBubble } from './EmoteBubble'
 import { PaintMarks } from './PaintMarks'
 import { SpeechBubble } from './SpeechBubble'
 import { applyKnock, CHARACTER_SCALE, DoodleFollower, hitWobble, KNOCK_TAG_DROP, knockAmount, SEATED_LIFT, startJump, STEP_RATE, stepJump, swingAmount } from './Player'
@@ -24,13 +25,14 @@ const CROWD_HEAD_Y = 1.32
 const CROWD_BODY_Y = 0.62
 
 /** 내 위치를 초당 10번 이내로 보낸다. 재접속 직후에도 보이도록 멈춰 있어도 1초마다 보낸다. */
-export function PresenceSender({ position, seated, airborne, onMove }: {
+export function PresenceSender({ position, seated, airborne, doubleJumped, onMove }: {
   position: RefObject<THREE.Vector3>
   seated: RefObject<boolean>
   airborne: RefObject<boolean>
+  doubleJumped: RefObject<boolean>
   onMove: (update: MoveUpdate) => void
 }) {
-  const last = useRef({ x: Number.NaN, z: Number.NaN, heading: 0, moving: false, seated: false, jumping: false, sinceSend: 0, sinceAlive: 0 })
+  const last = useRef({ x: Number.NaN, z: Number.NaN, heading: 0, moving: false, seated: false, jumping: false, doubleJumped: false, sinceSend: 0, sinceAlive: 0 })
 
   useFrame((_, delta) => {
     const state = last.current
@@ -45,7 +47,7 @@ export function PresenceSender({ position, seated, airborne, onMove }: {
     const moving = Math.hypot(dx, dz) > MIN_MOVE
     if (moving) state.heading = Math.atan2(dx, dz)
     if (seated.current) state.heading = 0
-    const changed = moving || moving !== state.moving || seated.current !== state.seated || airborne.current !== state.jumping || Number.isNaN(state.x)
+    const changed = moving || moving !== state.moving || seated.current !== state.seated || airborne.current !== state.jumping || doubleJumped.current !== state.doubleJumped || Number.isNaN(state.x)
     if (!changed && state.sinceAlive < KEEP_ALIVE_INTERVAL) return
 
     state.x = x
@@ -53,8 +55,9 @@ export function PresenceSender({ position, seated, airborne, onMove }: {
     state.moving = moving
     state.seated = seated.current
     state.jumping = airborne.current
+    state.doubleJumped = doubleJumped.current
     state.sinceAlive = 0
-    onMove({ x, z, heading: state.heading, moving, seated: seated.current, jumping: airborne.current })
+    onMove({ x, z, heading: state.heading, moving, seated: seated.current, jumping: airborne.current, doubleJumped: doubleJumped.current })
   })
 
   return null
@@ -75,7 +78,8 @@ function RemotePlayer({ player, speech, play, positions, space, leader }: {
   const companion = useRef(new THREE.Vector3())
   const placed = useRef(false)
   const motion = useRef<WalkMotion>({ phase: 0, amount: 0 })
-  const jump = useRef({ y: 0, speed: 0, wasJumping: false })
+  const ownerSeated = useRef(false)
+  const jump = useRef({ y: 0, speed: 0, doubled: false, wasJumping: false, wasDoubled: false })
 
   useFrame((_, delta) => {
     const group = root.current
@@ -84,6 +88,7 @@ function RemotePlayer({ player, speech, play, positions, space, leader }: {
     const target = positions.current.get(player.id)
     group.visible = Boolean(target)
     if (!target) return
+    ownerSeated.current = target.seated
 
     const dt = Math.min(delta, 0.05)
     const position = current.current
@@ -99,7 +104,9 @@ function RemotePlayer({ player, speech, play, positions, space, leader }: {
     }
     group.position.copy(position)
     if (target.jumping && !jump.current.wasJumping) startJump(jump.current)
+    if (target.doubleJumped && !jump.current.wasDoubled) startJump(jump.current)
     jump.current.wasJumping = target.jumping
+    jump.current.wasDoubled = target.doubleJumped
     stepJump(jump.current, dt)
     group.position.y = jump.current.y
 
@@ -144,9 +151,10 @@ function RemotePlayer({ player, speech, play, positions, space, leader }: {
         <group ref={tags}>
           <NameTag name={player.nickname} />
           {speech && <SpeechBubble text={speech} />}
+          <EmoteBubble id={player.id} emotes={play.emotes} raised={Boolean(speech)} />
         </group>
       </group>
-      {player.doodle && <DoodleFollower position={companion} leader={current} space={space} faceCamera={false} />}
+      {player.doodle && <DoodleFollower position={companion} leader={current} seated={ownerSeated} space={space} faceCamera={false} />}
     </>
   )
 }

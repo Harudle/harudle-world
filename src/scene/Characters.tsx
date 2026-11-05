@@ -10,8 +10,8 @@ import { useCanvasTexture, type DrawFn } from './useCanvasTexture'
 export type CharacterKind = 'harudle' | 'haru' | 'doodle'
 
 /** phase는 걸음 위치, amount는 0(서 있음)부터 1(걷는 중)까지의 세기다. */
-/** sit은 0(서 있음)에서 1(앉음)까지의 자세 값이고, swing은 붓을 휘두른 정도(0~1)다. */
-export type WalkMotion = { phase: number; amount: number; sit?: number; swing?: number }
+/** sit은 0(서 있음)에서 1(앉음)까지의 자세 값이고, swing은 붓을 휘두른 정도(0~1)다. 두들은 사람과 앉는 모양이 달라 dogSit을 따로 쓴다. */
+export type WalkMotion = { phase: number; amount: number; sit?: number; dogSit?: number; swing?: number }
 
 type CharacterProps = {
   motion?: RefObject<WalkMotion>
@@ -73,6 +73,9 @@ function Face({ radius, smile = true }: { radius: number; smile?: boolean }) {
 }
 
 const SEATED_LEG_ANGLE = -1.45
+const DOG_SIT_TILT = 0.45
+const DOG_SIT_DROP = 0.07
+const DOG_SIT_REAR_LEG = -0.95
 
 export function useLegSwing(motion: RefObject<WalkMotion> | undefined, swing = 0.8) {
   const left = useRef<THREE.Group>(null)
@@ -231,16 +234,30 @@ export function Haru({ motion, waving = false }: CharacterProps & { waving?: boo
 export function Doodle({ motion }: CharacterProps) {
   const front = useLegSwing(motion, 0.7)
   const back = useLegSwing(motion, -0.7)
+  const pose = useRef<THREE.Group>(null)
+  const head = useRef<THREE.Group>(null)
   const tail = useRef<THREE.Group>(null)
   const reducedMotion = usePrefersReducedMotion()
 
   useFrame(({ clock }) => {
     if (!tail.current) return
     tail.current.rotation.z = reducedMotion ? 0 : Math.sin(clock.elapsedTime * 11) * 0.35
+    // 엉덩이를 바닥에 내리고 앞다리는 곧게 세운 채, 고개는 앞을 본다.
+    const sit = motion?.current?.dogSit ?? 0
+    if (sit === 0 || !pose.current || !head.current) return
+    pose.current.rotation.x = -DOG_SIT_TILT * sit
+    pose.current.position.y = -DOG_SIT_DROP * sit
+    head.current.rotation.x = DOG_SIT_TILT * sit
+    for (const leg of [front.left.current, front.right.current]) {
+      if (leg) leg.rotation.x = THREE.MathUtils.lerp(leg.rotation.x, DOG_SIT_TILT, sit)
+    }
+    for (const leg of [back.left.current, back.right.current]) {
+      if (leg) leg.rotation.x = THREE.MathUtils.lerp(leg.rotation.x, DOG_SIT_REAR_LEG, sit)
+    }
   })
 
   return (
-    <group>
+    <group ref={pose}>
       <group ref={front.left} position={[-0.12, 0.36, 0.26]}>
         <Line length={0.36} />
       </group>
@@ -269,7 +286,7 @@ export function Doodle({ motion }: CharacterProps) {
         <torusGeometry args={[0.15, 0.035, 8, 18]} />
         <Toon color={LILAC} outline={false} />
       </mesh>
-      <group position={[0, 0.8, 0.56]}>
+      <group ref={head} position={[0, 0.8, 0.56]}>
         <mesh castShadow>
           <sphereGeometry args={[0.28, 24, 18]} />
           <Skin />

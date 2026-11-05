@@ -10,6 +10,7 @@ import { Avatar } from '../Avatar'
 import { Doodle, type WalkMotion } from '../Characters'
 import type { Seat } from '../seats'
 import { NameTag } from './NameTag'
+import { EmoteBubble } from './EmoteBubble'
 import { PaintMarks } from './PaintMarks'
 import { SpeechBubble } from './SpeechBubble'
 import type { DoorSpot, SpaceBounds } from './layout'
@@ -17,6 +18,7 @@ import type { DoorSpot, SpaceBounds } from './layout'
 const SPEED = 6
 const SPRINT_SPEED = 10
 const JUMP_SPEED = 7
+const DOUBLE_JUMP_SPEED = 6.5
 const GRAVITY = 20
 const HIT_WOBBLE_MS = 500
 const SWING_MS = 350
@@ -40,6 +42,8 @@ const DOOR_REACH = 1.25
 const DOOR_REARM_FACTOR = 1.6
 const ARRIVE_DISTANCE = 0.15
 const FOLLOW_DISTANCE = 1.5
+const DOODLE_SIT_GAP = 3
+const DOODLE_SIT_SPEED = 0.3
 export const STEP_RATE = 2.2
 // 벤치 앞까지 걸어가서 자리로 옮겨 앉는다. 벤치 상판 높이에 엉덩이가 오도록 몸을 올린다.
 const SEAT_APPROACH = 1.9
@@ -67,16 +71,22 @@ function isTyping(target: EventTarget | null) {
 }
 
 /** 점프 궤적. 같은 식을 다른 방문자에게도 써서 같은 높이로 뛰어 보이게 한다. */
-export function stepJump(jump: { y: number; speed: number }, dt: number) {
+export function stepJump(jump: { y: number; speed: number; doubled: boolean }, dt: number) {
   if (jump.y <= 0 && jump.speed <= 0) return
   jump.speed -= GRAVITY * dt
   jump.y = Math.max(jump.y + jump.speed * dt, 0)
-  if (jump.y === 0) jump.speed = 0
+  if (jump.y === 0) {
+    jump.speed = 0
+    jump.doubled = false
+  }
 }
 
-export function startJump(jump: { y: number; speed: number }) {
-  if (jump.y > 0 || jump.speed > 0) return false
-  jump.speed = JUMP_SPEED
+/** 바닥에서 한 번, 공중에서 한 번 더 뛸 수 있다. */
+export function startJump(jump: { y: number; speed: number; doubled: boolean }) {
+  const grounded = jump.y <= 0 && jump.speed <= 0
+  if (!grounded && jump.doubled) return false
+  jump.doubled = !grounded
+  jump.speed = grounded ? JUMP_SPEED : DOUBLE_JUMP_SPEED
   return true
 }
 
@@ -216,13 +226,15 @@ type PlayerProps = {
   seated: RefObject<boolean>
   /** 다른 방문자에게 알릴 공중에 뜬 상태 */
   airborne: RefObject<boolean>
+  /** 다른 방문자에게 알릴 이단 점프 상태 */
+  doubleJumped: RefObject<boolean>
   play: PlayState
   /** 다른 방문자 위치. 앉아 있는 자리를 피하는 데 쓴다. */
   positions: RefObject<Map<number, RemotePosition>>
 }
 
 /** 키보드나 바닥 클릭으로 걷는 캐릭터. 카메라도 같은 거리만큼 함께 옮겨 따라오게 한다. */
-export function Player({ avatar, nickname, speech, position, space, doors, onDoor, paused, overview, jump, moveTarget, joystick, seatRequest, seated, airborne, play, positions }: PlayerProps) {
+export function Player({ avatar, nickname, speech, position, space, doors, onDoor, paused, overview, jump, moveTarget, joystick, seatRequest, seated, airborne, doubleJumped, play, positions }: PlayerProps) {
   const root = useRef<THREE.Group>(null)
   const body = useRef<THREE.Group>(null)
   const marker = useRef<THREE.Mesh>(null)
@@ -231,7 +243,7 @@ export function Player({ avatar, nickname, speech, position, space, doors, onDoo
   const velocity = useRef(new THREE.Vector3())
   const motion = useRef<WalkMotion>({ phase: 0, amount: 0 })
   const seat = useRef<Seat | null>(null)
-  const jumpState = useRef({ y: 0, speed: 0 })
+  const jumpState = useRef({ y: 0, speed: 0, doubled: false })
   const jumpRequested = useRef(false)
   // 물어본 문은 벗어났다 다시 올 때까지 또 묻지 않는다.
   const touchedDoor = useRef<string | null>(null)
@@ -447,6 +459,7 @@ export function Player({ avatar, nickname, speech, position, space, doors, onDoo
     }
     stepJump(jumpState.current, dt)
     airborne.current = jumpState.current.y > 0 || jumpState.current.speed > 0
+    doubleJumped.current = jumpState.current.doubled
     player.position.copy(current)
     player.position.y = jumpState.current.y
     moved.subVectors(current, before)
@@ -506,6 +519,7 @@ export function Player({ avatar, nickname, speech, position, space, doors, onDoo
         <group ref={tags}>
           <NameTag name={nickname} />
           {speech && <SpeechBubble text={speech} />}
+          {play.myId !== null && <EmoteBubble id={play.myId} emotes={play.emotes} raised={Boolean(speech)} />}
         </group>
       </group>
       <mesh ref={marker} rotation-x={-Math.PI / 2} visible={false}>
@@ -520,17 +534,20 @@ type FollowerProps = {
   space: SpaceBounds
   position: RefObject<THREE.Vector3>
   leader: RefObject<THREE.Vector3>
+  /** 앞사람이 앉아 있으면 곁에 와서 함께 앉는다. */
+  seated: RefObject<boolean>
   /** 내 두들만 내 화면을 돌아본다. 다른 사람의 두들이 내 카메라를 따라 고개를 돌리면 안 된다. */
   faceCamera?: boolean
 }
 
 /** 주인과 일정한 거리를 두고 따라 걷는 강아지 두들 */
-export function DoodleFollower({ position, leader, space, faceCamera = true }: FollowerProps) {
+export function DoodleFollower({ position, leader, seated, space, faceCamera = true }: FollowerProps) {
   const root = useRef<THREE.Group>(null)
   const body = useRef<THREE.Group>(null)
   const velocity = useRef(new THREE.Vector3())
   const wish = useRef(new THREE.Vector3())
   const motion = useRef<WalkMotion>({ phase: 0, amount: 0 })
+  const settled = useRef(false)
   const reducedMotion = usePrefersReducedMotion()
 
   useFrame(({ camera }, delta) => {
@@ -544,16 +561,24 @@ export function DoodleFollower({ position, leader, space, faceCamera = true }: F
       current.copy(leader.current).add(new THREE.Vector3(Math.sign(current.x - leader.current.x) || 1, 0, 1))
       velocity.current.set(0, 0, 0)
     }
-    if (gap > FOLLOW_DISTANCE) {
+    // 벤치에 막혀 더 못 다가가도 제자리걸음하지 않도록, 곁에서 멈췄으면 그 자리에 앉는다.
+    if (!seated.current) settled.current = false
+    if (settled.current) {
+      direction.set(0, 0, 0)
+    } else if (gap > FOLLOW_DISTANCE) {
       direction.normalize().multiplyScalar(Math.min((gap - FOLLOW_DISTANCE) * 5, SPRINT_SPEED * 1.1))
     } else {
       direction.set(0, 0, 0)
     }
     velocity.current.lerp(direction, 1 - Math.exp(-ACCELERATION * dt))
+    const beforeX = current.x
+    const beforeZ = current.z
     current.addScaledVector(velocity.current, dt)
     resolveCollisions(current, space)
+    if (seated.current && gap < DOODLE_SIT_GAP && Math.hypot(current.x - beforeX, current.z - beforeZ) < DOODLE_SIT_SPEED * dt) settled.current = true
     root.current.position.copy(current)
     animateBody(body.current, velocity.current, current, faceCamera ? camera : null, motion.current, reducedMotion, dt)
+    motion.current.dogSit = THREE.MathUtils.damp(motion.current.dogSit ?? 0, settled.current ? 1 : 0, 8, dt)
   })
 
   return (

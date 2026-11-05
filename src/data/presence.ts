@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import { sanitizeAvatar, type AvatarConfig } from './avatar'
+import { isEmote, type EmoteId } from './emotes'
 import { isEaselBrush, sanitizeSegment, type EaselBrush, type EaselSegment } from './easel'
 
 export type PresenceStatus = 'connecting' | 'online' | 'offline' | 'full'
@@ -19,9 +20,10 @@ export type RemotePosition = {
   moving: boolean
   seated: boolean
   jumping: boolean
+  doubleJumped: boolean
 }
 
-export type MoveUpdate = { x: number; z: number; heading: number; moving: boolean; seated: boolean; jumping: boolean }
+export type MoveUpdate = { x: number; z: number; heading: number; moving: boolean; seated: boolean; jumping: boolean; doubleJumped: boolean }
 
 /** historic은 들어오기 전의 대화다. id를 알 수 없는 옛 글은 null이다. */
 export type ChatMessage = { key: number; id: number | null; nickname: string; text: string; mine: boolean; at: number; historic: boolean }
@@ -31,14 +33,17 @@ export type ChatReject = 'long' | 'link' | 'fast'
 /** 머리 위 말풍선 문구. 방문자 id별로 잠깐만 들고 있는다. */
 export type SpeechMap = Readonly<Record<number, string>>
 
-/** 날아가는 종이 하나. to가 없으면 x, z 자리에 떨어진다. */
-export type PaperThrow = { key: number; from: number; nickname: string; to: number | null; x: number; z: number; knock: boolean }
+/** 날아가는 종이 하나. 겨냥한 x, z 자리로 날아가 떨어지고, 맞았는지는 도착할 때 서버가 알려 준다. */
+export type PaperThrow = { key: number; from: number; nickname: string; x: number; z: number }
 
 /** 사람을 직접 눌렀거나, 화면의 한 점(-1~1)을 골랐거나, 마우스가 가리키는 곳으로 던지는 요청 */
 export type ThrowRequest = { target: number } | { point: { x: number; y: number } } | { atPointer: true }
 
 /** 붓으로 칠해진 자국 하나 */
 export type PaintMark = { color: string; at: number }
+
+/** 지금 머리 위에 띄운 감정 표현 */
+export type ActiveEmote = { emote: EmoteId; at: number }
 
 /** 붓을 휘두른 때와 칠한 상대 */
 export type BrushSwing = { at: number; to: number }
@@ -59,9 +64,12 @@ export type PlayState = {
   swings: RefObject<Map<number, BrushSwing>>
   /** 방문자 id별로 칠해진 자국 */
   paints: RefObject<Map<number, PaintMark[]>>
+  /** 방문자 id별로 마지막에 고른 감정 표현 */
+  emotes: RefObject<Map<number, ActiveEmote>>
+  sendEmote: (emote: EmoteId) => void
   sendBrush: (to: number) => void
-  sendThrow: (target: { to: number } | { x: number; z: number }) => void
-  finishThrow: (paper: PaperThrow) => void
+  sendThrow: (spot: { x: number; z: number }) => void
+  finishThrow: (key: number) => void
   /** 화면 위쪽에 잠깐 띄우는 알림 */
   notify: (text: string) => void
 }
@@ -111,6 +119,7 @@ export function usePresence(active: boolean, avatar: AvatarConfig, doodle: boole
   const knocks = useRef(new Map<number, number>())
   const swings = useRef(new Map<number, BrushSwing>())
   const paints = useRef(new Map<number, PaintMark[]>())
+  const emotes = useRef(new Map<number, ActiveEmote>())
   const throwRequest = useRef<ThrowRequest | null>(null)
   const myIdRef = useRef<number | null>(null)
   /** 맞은 사람을 휘청이거나 쓰러뜨리고, 나라면 알려 준다. */
@@ -169,7 +178,7 @@ export function usePresence(active: boolean, avatar: AvatarConfig, doodle: boole
       }
 
       socket.onmessage = (event) => {
-        let message: { t?: string; holder?: unknown; segs?: unknown[]; id?: number; total?: number; players?: unknown[]; nickname?: unknown; text?: unknown; reason?: ChatReject; from?: unknown; to?: unknown; x?: unknown; z?: unknown; knock?: unknown; color?: unknown; items?: { id?: unknown; nickname?: unknown; text?: unknown; at?: unknown }[] }
+        let message: { t?: string; holder?: unknown; segs?: unknown[]; id?: number; total?: number; players?: unknown[]; nickname?: unknown; text?: unknown; reason?: ChatReject; from?: unknown; to?: unknown; x?: unknown; z?: unknown; knock?: unknown; color?: unknown; emote?: unknown; items?: { id?: unknown; nickname?: unknown; text?: unknown; at?: unknown }[] }
         try {
           message = JSON.parse(event.data)
         } catch {
@@ -199,10 +208,8 @@ export function usePresence(active: boolean, avatar: AvatarConfig, doodle: boole
             key: chatKey.current,
             from: message.from,
             nickname: typeof message.nickname === 'string' ? message.nickname : '',
-            to: typeof message.to === 'number' ? message.to : null,
             x: typeof message.x === 'number' ? message.x : 0,
             z: typeof message.z === 'number' ? message.z : 0,
-            knock: message.knock === true,
           }
           setThrows((current) => [...current, paper].slice(-MAX_FLYING_PAPERS))
         } else if (message.t === 'hit' && typeof message.id === 'number') {
@@ -219,6 +226,8 @@ export function usePresence(active: boolean, avatar: AvatarConfig, doodle: boole
             chatKey.current += 1
             setHitNotice({ text: `${typeof message.nickname === 'string' && message.nickname ? message.nickname : '누군가'}님이 붓으로 칠했어요!`, key: chatKey.current })
           }
+        } else if (message.t === 'emote' && typeof message.from === 'number' && isEmote(message.emote)) {
+          if (!muted.current.has(message.from)) emotes.current.set(message.from, { emote: message.emote, at: performance.now() })
         } else if (message.t === 'easel') {
           const { t: _type, ...brush } = message
           if (isEaselBrush(brush)) setEasel({ holder: brush.holder, x: brush.x, z: brush.z })
@@ -247,14 +256,15 @@ export function usePresence(active: boolean, avatar: AvatarConfig, doodle: boole
           const ids = new Set(next.map((player) => player.id))
           for (const id of positions.current.keys()) if (!ids.has(id)) positions.current.delete(id)
           for (const id of paints.current.keys()) if (id !== myId && !ids.has(id)) paints.current.delete(id)
+          for (const id of emotes.current.keys()) if (id !== myId && !ids.has(id)) emotes.current.delete(id)
           setOthers(next)
           if (typeof message.total === 'number') setTotal(message.total)
         } else if (message.t === 'count' && typeof message.total === 'number') {
           setTotal(message.total)
         } else if (message.t === 'snapshot' && Array.isArray(message.players)) {
-          for (const player of message.players as { id: number; x: number; z: number; h: number; m: boolean; s?: boolean; j?: boolean }[]) {
+          for (const player of message.players as { id: number; x: number; z: number; h: number; m: boolean; s?: boolean; j?: boolean; d?: boolean }[]) {
             if (player.id === myId) continue
-            positions.current.set(player.id, { x: player.x, z: player.z, heading: player.h, moving: player.m, seated: player.s === true, jumping: player.j === true })
+            positions.current.set(player.id, { x: player.x, z: player.z, heading: player.h, moving: player.m, seated: player.s === true, jumping: player.j === true, doubleJumped: player.d === true })
           }
         }
       }
@@ -316,10 +326,10 @@ export function usePresence(active: boolean, avatar: AvatarConfig, doodle: boole
     setEaselVersion((version) => version + 1)
   }, [room])
 
-  const sendMove = useCallback(({ x, z, heading, moving, seated, jumping }: MoveUpdate) => {
+  const sendMove = useCallback(({ x, z, heading, moving, seated, jumping, doubleJumped }: MoveUpdate) => {
     const socket = socketRef.current
     if (socket?.readyState !== WebSocket.OPEN) return
-    socket.send(JSON.stringify({ t: 'move', x, z, h: heading, m: moving, s: seated, j: jumping }))
+    socket.send(JSON.stringify({ t: 'move', x, z, h: heading, m: moving, s: seated, j: jumping, d: doubleJumped }))
   }, [])
 
   const sendChat = useCallback((text: string) => {
@@ -339,9 +349,14 @@ export function usePresence(active: boolean, avatar: AvatarConfig, doodle: boole
     setSpeech(({ [id]: _removed, ...rest }) => rest)
   }, [])
 
-  const sendThrow = useCallback((target: { to: number } | { x: number; z: number }) => {
+  const sendThrow = useCallback((spot: { x: number; z: number }) => {
     const socket = socketRef.current
-    if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ t: 'throw', ...target }))
+    if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ t: 'throw', ...spot }))
+  }, [])
+
+  const sendEmote = useCallback((emote: EmoteId) => {
+    const socket = socketRef.current
+    if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ t: 'emote', emote }))
   }, [])
 
   const sendBrush = useCallback((to: number) => {
@@ -360,11 +375,9 @@ export function usePresence(active: boolean, avatar: AvatarConfig, doodle: boole
     }
   }, [])
 
-  /** 종이가 도착하면 목록에서 빼고, 맞은 사람을 표시한다. */
-  const finishThrow = useCallback((paper: PaperThrow) => {
-    setThrows((current) => current.filter((candidate) => candidate.key !== paper.key))
-    if (paper.to !== null) applyHit(paper.to, paper.nickname, paper.knock)
-  }, [applyHit])
+  const finishThrow = useCallback((key: number) => {
+    setThrows((current) => current.filter((candidate) => candidate.key !== key))
+  }, [])
 
   const notify = useCallback((text: string) => {
     chatKey.current += 1
@@ -375,11 +388,11 @@ export function usePresence(active: boolean, avatar: AvatarConfig, doodle: boole
 
   const holdsBrush = avatar.held === 'brush'
   const play = useMemo<PlayState>(
-    () => ({ myId, throws, hits, knocks, throwRequest, holdsBrush, swings, paints, sendBrush, sendThrow, finishThrow, notify }),
-    [myId, throws, holdsBrush, sendBrush, sendThrow, finishThrow, notify],
+    () => ({ myId, throws, hits, knocks, throwRequest, holdsBrush, swings, paints, emotes, sendEmote, sendBrush, sendThrow, finishThrow, notify }),
+    [myId, throws, holdsBrush, sendEmote, sendBrush, sendThrow, finishThrow, notify],
   )
 
-  const chat = { status, messages, reject: chatReject, send: sendChat, mute: muteChat }
+  const chat = { status, messages, reject: chatReject, send: sendChat, mute: muteChat, emote: sendEmote }
 
   return { status, others, total, positions, sendMove, chat, speech, mySpeech: myId === null ? '' : (speech[myId] ?? ''), play, hitNotice, easel, easelArt, sendEasel, notify }
 }

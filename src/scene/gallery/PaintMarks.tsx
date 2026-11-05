@@ -10,7 +10,7 @@ const FADE_MS = 1500
 const FORWARD = new THREE.Vector3(0, 0, 1)
 const HEAD_CENTER = new THREE.Vector3(0, 1.3, 0)
 // 눈과 입을 피해 머리 표면에 차례로 묻는다. 모자에 가려지지 않도록 얼굴 아래쪽부터 쓴다.
-const SPOTS: [number, number, number][] = [
+const FACE_SPOTS: [number, number, number][] = [
   [0.22, 1.22, 0.25],
   [-0.24, 1.2, 0.22],
   [0, 1.04, 0.22],
@@ -18,6 +18,8 @@ const SPOTS: [number, number, number][] = [
   [-0.3, 1.33, 0.15],
   [0, 1.33, 0.34],
 ]
+// 어느 쪽에서 봐도 보이도록 한 번 칠할 때 얼굴과 뒤통수에 함께 묻는다.
+const SPOTS = FACE_SPOTS.flatMap(([x, y, z]): [number, number, number][] => [[x, y, z], [-x, y, -z]])
 
 /** 붓으로 칠해진 자국. 아바타 설정은 그대로 두고 잠깐 묻었다가 사라진다. */
 export function PaintMarks({ id, paints }: { id: number; paints: RefObject<Map<number, PaintMark[]>> }) {
@@ -40,7 +42,7 @@ export function PaintMarks({ id, paints }: { id: number; paints: RefObject<Map<n
     const marks = paints.current.get(id)?.filter((mark) => now - mark.at < PAINT_MS) ?? []
     meshes.current.forEach((mesh, index) => {
       if (!mesh) return
-      const mark = marks[index]
+      const mark = marks[Math.floor(index / 2)]
       mesh.visible = mark !== undefined
       if (!mark) return
       const age = now - mark.at

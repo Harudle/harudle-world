@@ -31,7 +31,7 @@ function JumpIcon() {
  * 조이스틱을 누른 손가락이 있으면 다른 손가락의 click이 오지 않아서 닿는 순간 반응한다.
  * 키보드로 누른 click(detail 0)만 따로 받는다.
  */
-function pressHandlers(action: () => void): ButtonHTMLAttributes<HTMLButtonElement> {
+export function pressHandlers(action: () => void): ButtonHTMLAttributes<HTMLButtonElement> {
   return {
     onPointerDown: action,
     onClick: (event) => {

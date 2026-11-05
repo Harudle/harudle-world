@@ -131,32 +131,33 @@ function Headwear({ kind, color, skinColor }: { kind: AvatarConfig['head']; colo
   }
   if (kind === 'cap') {
     return (
-      <group>
-        <mesh position-y={0.09} castShadow>
-          <sphereGeometry args={[0.345, 24, 12, 0, Math.PI * 2, 0, 1.455]} />
+      // 뒤로 쓴 모자라 살짝 뒤로 젖혀 이마가 보이고, 둥근 챙은 뒤통수로 간다.
+      <group position-y={0.03} rotation-x={-0.2}>
+        <mesh position-y={0.06} castShadow>
+          <sphereGeometry args={[0.355, 28, 14, 0, Math.PI * 2, 0, 1.5]} />
           <Skin color={color} />
         </mesh>
-        <mesh position-y={0.44}>
-          <sphereGeometry args={[0.028, 10, 8]} />
+        <mesh position-y={0.425}>
+          <sphereGeometry args={[0.03, 10, 8]} />
           <Skin color={color} thickness={1.1} />
         </mesh>
-        {/* 뒤로 쓴 모자라 챙은 뒤통수로 가고, 이마에는 뒤쪽 조임 구멍이 보인다. */}
-        <mesh position={[0, 0.16, -0.22]} rotation-x={-0.12} castShadow>
-          <cylinderGeometry args={[0.27, 0.27, 0.025, 24, 1, false, Math.PI / 2, Math.PI]} />
+        <mesh position={[0, 0.1, -0.39]} rotation-x={0.08} scale={[0.25, 0.028, 0.2]} castShadow>
+          <sphereGeometry args={[1, 24, 12]} />
           <Skin color={color} thickness={1.3} />
         </mesh>
-        <group position={[0, 0.135, 0.345]} rotation-x={-0.26}>
+        {/* 이마 쪽에는 뒤쪽 조임 구멍과 끈이 보인다. */}
+        <group position={[0, 0.105, 0.358]} rotation-x={-0.2}>
           <mesh>
-            <circleGeometry args={[0.085, 18, 0, Math.PI]} />
+            <circleGeometry args={[0.075, 18, 0, Math.PI]} />
             <meshBasicMaterial color={skinColor} />
           </mesh>
           <mesh position-z={0.002}>
-            <torusGeometry args={[0.085, 0.01, 6, 18, Math.PI]} />
+            <torusGeometry args={[0.075, 0.009, 6, 18, Math.PI]} />
             <meshBasicMaterial color={INK} />
           </mesh>
-          <mesh position={[0, 0.006, 0.004]} rotation-z={Math.PI / 2}>
-            <capsuleGeometry args={[0.012, 0.15, 4, 6]} />
-            <meshBasicMaterial color={INK} />
+          <mesh position-z={0.006} rotation-z={Math.PI / 2}>
+            <capsuleGeometry args={[0.016, 0.14, 4, 8]} />
+            <Skin color={color} thickness={1.1} />
           </mesh>
         </group>
       </group>

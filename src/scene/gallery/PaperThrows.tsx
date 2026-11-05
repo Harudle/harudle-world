@@ -8,13 +8,14 @@ import { BRUSH_REACH, type SpaceBounds } from './layout'
 import { knockAmount } from './Player'
 
 const THROW_RANGE = 30
-const AIM_RADIUS_PIXELS = 45
+// 몸에서 이만큼 안쪽을 가리키면 그 사람이 서 있는 자리를 겨냥한다. 손가락은 마우스보다 굵어서 조금 넓게 받는다.
+const AIM_BODY_RADIUS_MOUSE = 0.55
+const AIM_BODY_RADIUS_TOUCH = 0.8
+const BODY_TOP_HEIGHT = 1.7
 const WALL_MARGIN = 0.5
 const MARKER_HEIGHT = 0.03
-const BODY_CENTER_HEIGHT = 1.1
 const COOLDOWN_SECONDS = 0.8
 const HAND_HEIGHT = 1.5
-const HIT_HEIGHT = 1.3
 const FLIGHT_SPEED = 16
 const MIN_FLIGHT_SECONDS = 0.25
 const ARC_HEIGHT = 1.4
@@ -83,8 +84,6 @@ function FlyingPaper({ paper, positions, leader, play }: {
   const landing = useRef(new THREE.Vector3(paper.x, REST_HEIGHT, paper.z))
   const flight = useRef({ elapsed: 0, duration: 0, landed: false, rest: 0 })
 
-  const locate = (id: number): { x: number; z: number } | undefined => (id === play.myId ? leader.current : positions.current.get(id))
-
   useFrame((_, delta) => {
     const paperMesh = mesh.current
     if (!paperMesh) return
@@ -93,22 +92,19 @@ function FlyingPaper({ paper, positions, leader, play }: {
 
     if (state.landed) {
       state.rest += dt
-      if (state.rest >= REST_SECONDS) play.finishThrow({ ...paper, to: null })
+      if (state.rest >= REST_SECONDS) play.finishThrow(paper.key)
       return
     }
 
     if (!start.current) {
-      const origin = locate(paper.from)
+      const origin = paper.from === play.myId ? leader.current : positions.current.get(paper.from)
       if (!origin) {
-        play.finishThrow({ ...paper, to: null })
+        play.finishThrow(paper.key)
         return
       }
       start.current = new THREE.Vector3(origin.x, HAND_HEIGHT, origin.z)
     }
 
-    // 맞을 사람이 움직여도 따라가서 맞힌다. 방을 나갔으면 마지막 자리에 떨어진다.
-    const target = paper.to === null ? undefined : locate(paper.to)
-    if (target) landing.current.set(target.x, HIT_HEIGHT, target.z)
     if (state.duration === 0) {
       state.duration = Math.max(start.current.distanceTo(landing.current) / FLIGHT_SPEED, MIN_FLIGHT_SECONDS)
     }
@@ -122,10 +118,6 @@ function FlyingPaper({ paper, positions, leader, play }: {
     paperMesh.rotation.z += SPIN * 0.7 * dt
 
     if (progress === 1) {
-      if (paper.to !== null && target) {
-        play.finishThrow(paper)
-        return
-      }
       paperMesh.position.y = REST_HEIGHT
       state.landed = true
     }
@@ -146,7 +138,7 @@ const IS_TOUCH = window.matchMedia('(pointer: coarse)').matches
 
 type AimPoint = { x: number; y: number }
 
-/** F 키, 우클릭, 휴대폰 조준, 캐릭터 클릭을 받아 던지고, 날아가는 종이를 그린다. 고른 곳으로만 던진다. 붓을 들었으면 닿는 사람은 붓으로 칠한다. */
+/** F 키, 우클릭, 휴대폰 조준, 캐릭터 클릭을 받아 던지고, 날아가는 종이를 그린다. 던질 때 고른 자리로만 날아가므로 비켜나면 피할 수 있다. 붓을 들었으면 닿는 사람은 붓으로 칠한다. */
 export function PaperThrows({ players, positions, leader, play, paused, space }: {
   players: RemotePlayer[]
   positions: Positions
@@ -160,7 +152,7 @@ export function PaperThrows({ players, positions, leader, play, paused, space }:
   const gl = useThree((state) => state.gl)
   const host = useThree((state) => state.events.connected as HTMLElement | undefined)
   const scratch = useMemo(
-    () => ({ raycaster: new THREE.Raycaster(), projected: new THREE.Vector3(), ground: new THREE.Vector3(), ndc: new THREE.Vector2() }),
+    () => ({ raycaster: new THREE.Raycaster(), feet: new THREE.Vector3(), top: new THREE.Vector3(), ground: new THREE.Vector3(), ndc: new THREE.Vector2() }),
     [],
   )
   const { throwRequest, sendThrow } = play
@@ -188,20 +180,21 @@ export function PaperThrows({ players, positions, leader, play, paused, space }:
     return () => listener.removeEventListener('contextmenu', handleContextMenu)
   }, [gl, host, throwRequest])
 
-  useFrame(({ camera, pointer, size }, delta) => {
-    const { raycaster, projected, ground, ndc } = scratch
+  useFrame(({ camera, pointer }, delta) => {
+    const { raycaster, feet, top, ground, ndc } = scratch
     const { x, z } = leader.current
 
-    /** 고른 점 가까이에 보이는 사람. 닿는 거리 밖이면 겨냥하지 않는다. */
+    /** 고른 점이 몸을 가리키는 사람. 멀수록 작게 보이는 만큼 정확히 겨냥해야 한다. 닿는 거리 밖이면 겨냥하지 않는다. */
     const pickPerson = (aim: AimPoint) => {
+      raycaster.setFromCamera(ndc.set(aim.x, aim.y), camera)
+      const bodyRadius = IS_TOUCH ? AIM_BODY_RADIUS_TOUCH : AIM_BODY_RADIUS_MOUSE
       let picked: number | null = null
-      let nearest = AIM_RADIUS_PIXELS
+      let nearest = bodyRadius * bodyRadius
       for (const player of players) {
         const position = positions.current.get(player.id)
         if (!position || Math.hypot(position.x - x, position.z - z) > THROW_RANGE) continue
-        projected.set(position.x, BODY_CENTER_HEIGHT, position.z).project(camera)
-        const distance = Math.hypot(((projected.x - aim.x) * size.width) / 2, ((projected.y - aim.y) * size.height) / 2)
-        if (projected.z < 1 && distance < nearest) {
+        const distance = raycaster.ray.distanceSqToSegment(feet.set(position.x, 0, position.z), top.set(position.x, BODY_TOP_HEIGHT, position.z))
+        if (distance < nearest) {
           nearest = distance
           picked = player.id
         }
@@ -226,7 +219,7 @@ export function PaperThrows({ players, positions, leader, play, paused, space }:
 
     const knocked = play.myId !== null && knockAmount(play.knocks.current.get(play.myId)) > 0
 
-    // PC에서는 F 키나 우클릭으로 어디에 떨어질지 바닥에 미리 보여 준다.
+    // PC에서는 F 키나 우클릭으로 어디에 떨어질지 바닥에 미리 보여 준다. 사람을 가리키면 그 사람이 지금 선 자리다.
     const ring = marker.current
     if (ring) {
       ring.visible = !IS_TOUCH && !paused && !knocked
@@ -255,22 +248,17 @@ export function PaperThrows({ players, positions, leader, play, paused, space }:
       if (!target) return
       cooldown.current = COOLDOWN_SECONDS
       if (brushIfNear(request.target)) return
-      if (Math.hypot(target.x - x, target.z - z) <= THROW_RANGE) sendThrow({ to: request.target })
-      else {
-        const distance = Math.hypot(target.x - x, target.z - z)
-        sendThrow({ x: x + ((target.x - x) / distance) * THROW_RANGE, z: z + ((target.z - z) / distance) * THROW_RANGE })
-      }
+      const distance = Math.hypot(target.x - x, target.z - z)
+      const reach = distance > THROW_RANGE ? THROW_RANGE / distance : 1
+      sendThrow({ x: x + (target.x - x) * reach, z: z + (target.z - z) * reach })
       return
     }
 
     const aim = 'point' in request ? request.point : pointer
     cooldown.current = COOLDOWN_SECONDS
     const person = pickPerson(aim)
-    if (person !== null) {
-      if (!brushIfNear(person)) sendThrow({ to: person })
-      return
-    }
-    const spot = pickGround(aim)
+    if (person !== null && brushIfNear(person)) return
+    const spot = (person === null ? undefined : positions.current.get(person)) ?? pickGround(aim)
     sendThrow({ x: spot.x, z: spot.z })
   })
 

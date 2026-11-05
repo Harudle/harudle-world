@@ -41,12 +41,27 @@ const KEYBOARD_ROWS: { action: string; how: ReactNode }[] = [
       </>
     ),
   },
-  { action: '점프', how: <Key>Space</Key> },
+  {
+    action: '점프',
+    how: (
+      <>
+        <Key>Space</Key> 공중에서 한 번 더 누르면 이단 점프
+      </>
+    ),
+  },
   {
     action: '종이 던지기',
     how: (
       <>
-        <Key>F</Key> 또는 우클릭, 가리킨 곳 어디든 (사람은 클릭)
+        <Key>F</Key> 또는 우클릭, 가리킨 곳 어디든 (사람은 클릭, 비켜나면 피해요)
+      </>
+    ),
+  },
+  {
+    action: '감정 표현',
+    how: (
+      <>
+        <Key>1</Key>~<Key>6</Key> 또는 채팅 옆 웃는 얼굴 버튼
       </>
     ),
   },
@@ -74,8 +89,9 @@ const TOUCH_ROWS: { action: string; how: ReactNode }[] = [
   { action: '걷기', how: '왼쪽 아래 조이스틱' },
   { action: '둘러보기', how: '화면을 밀기' },
   { action: '달리기', how: '조이스틱을 끝까지 밀기' },
-  { action: '점프', how: '오른쪽 아래 화살표 버튼' },
+  { action: '점프', how: '오른쪽 아래 화살표 버튼, 공중에서 한 번 더 누르면 이단 점프' },
   { action: '종이 던지기', how: '사람 터치, 종이 버튼 뒤 어디든 터치' },
+  { action: '감정 표현', how: '채팅 옆 웃는 얼굴 버튼' },
   { action: '붓 칠하기', how: '붓을 들고 가까운 사람 터치' },
   { action: '앉기', how: '벤치 터치' },
 ]
