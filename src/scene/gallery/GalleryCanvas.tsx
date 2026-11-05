@@ -115,6 +115,7 @@ export default function GalleryCanvas({
   const seatRequest = useRef<Seat | null>(null)
   const seated = useRef(false)
   const airborne = useRef(false)
+  const doubleJumped = useRef(false)
   const companion = useRef(new THREE.Vector3(MAIN_START.x + 1.2, 0, MAIN_START.z + 1))
   const space = roomLayout?.space ?? MAIN_SPACE
   const slots = roomLayout?.slots ?? MAIN_SLOTS
@@ -268,12 +269,13 @@ export default function GalleryCanvas({
         seatRequest={seatRequest}
         seated={seated}
         airborne={airborne}
+        doubleJumped={doubleJumped}
         play={play}
         positions={positions}
         onDoor={onDoor}
       />
-      {doodleFollows && <DoodleFollower position={companion} leader={leader} space={space} />}
-      <PresenceSender position={leader} seated={seated} airborne={airborne} onMove={onMove} />
+      {doodleFollows && <DoodleFollower position={companion} leader={leader} seated={seated} space={space} />}
+      <PresenceSender position={leader} seated={seated} airborne={airborne} doubleJumped={doubleJumped} onMove={onMove} />
       <RemotePlayers players={others} speech={speech} play={play} positions={positions} space={space} leader={leader} />
       <PaperThrows players={others} positions={positions} leader={leader} play={play} paused={paused} space={space} />
     </Canvas>

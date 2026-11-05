@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
+import type { EmoteId } from '../data/emotes'
 import type { ChatMessage, ChatReject, PresenceStatus } from '../data/presence'
+import { EmotePicker } from './EmotePicker'
 
 const MAX_LENGTH = 100
 const NOTICE_SECONDS = 4
@@ -30,12 +32,13 @@ type ChatPanelProps = {
     reject: { reason: ChatReject; key: number } | null
     send: (text: string) => boolean
     mute: (id: number) => void
+    emote: (emote: EmoteId) => void
   }
 }
 
 /** 같은 공간에 있는 사람끼리 나누는 채팅. 최근 대화는 서버에 저장되어 나중에 온 사람도 본다. */
 export function ChatPanel({ chat }: ChatPanelProps) {
-  const { status, messages, reject, send, mute } = chat
+  const { status, messages, reject, send, mute, emote } = chat
   const [open, setOpen] = useState(OPEN_BY_DEFAULT)
   const [draft, setDraft] = useState('')
   const [notice, setNotice] = useState('')
@@ -120,9 +123,12 @@ export function ChatPanel({ chat }: ChatPanelProps) {
             ))}
           </ol>
         )}
-        <button type="button" onClick={() => setOpen(true)} className={`${BUTTON} pointer-events-auto`}>
-          채팅{unread > 0 && ` ${unread}`}
-        </button>
+        <div className="pointer-events-auto flex items-center gap-2">
+          <button type="button" onClick={() => setOpen(true)} className={BUTTON}>
+            채팅{unread > 0 && ` ${unread}`}
+          </button>
+          <EmotePicker disabled={!online} onEmote={emote} className="size-11 rounded-full shadow-[3px_3px_0_var(--color-ink)]" />
+        </div>
       </div>
     )
   }
@@ -174,6 +180,7 @@ export function ChatPanel({ chat }: ChatPanelProps) {
         </p>
       )}
       <form onSubmit={handleSubmit} className="flex gap-1">
+        <EmotePicker disabled={!online} onEmote={emote} className="h-full min-h-9 w-9 rounded-lg pointer-coarse:min-h-11 pointer-coarse:w-11" />
         <input
           ref={input}
           type="text"
@@ -181,7 +188,7 @@ export function ChatPanel({ chat }: ChatPanelProps) {
           maxLength={MAX_LENGTH}
           disabled={!online}
           aria-label="채팅 메시지"
-          placeholder={online ? (IS_TOUCH ? '메시지를 입력해요' : '메시지를 입력해요 (Enter)') : '연결되면 쓸 수 있어요'}
+          placeholder={online ? (IS_TOUCH ? '메시지를 입력해요' : '메시지 입력 (Enter)') : '연결되면 쓸 수 있어요'}
           enterKeyHint="send"
           autoComplete="off"
           onChange={(event) => setDraft(event.target.value)}

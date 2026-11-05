@@ -61,6 +61,7 @@ export function WalkStage({
   const seatRequest = useRef<Seat | null>(null)
   const seated = useRef(false)
   const airborne = useRef(false)
+  const doubleJumped = useRef(false)
   // 여럿이 동시에 들어와도 겹치지 않게 입구 앞에 흩어져 시작한다.
   const leader = useRef(new THREE.Vector3(start.x + (Math.random() - 0.5) * 6, 0, start.z + Math.random() * 2))
   const companion = useRef(new THREE.Vector3(start.x + 1.2, 0, start.z + 1))
@@ -132,12 +133,13 @@ export function WalkStage({
         seatRequest={seatRequest}
         seated={seated}
         airborne={airborne}
+        doubleJumped={doubleJumped}
         play={play}
         positions={positions}
         onDoor={onExit}
       />
-      {doodleFollows && <DoodleFollower position={companion} leader={leader} space={space} />}
-      <PresenceSender position={leader} seated={seated} airborne={airborne} onMove={onMove} />
+      {doodleFollows && <DoodleFollower position={companion} leader={leader} seated={seated} space={space} />}
+      <PresenceSender position={leader} seated={seated} airborne={airborne} doubleJumped={doubleJumped} onMove={onMove} />
       <RemotePlayers players={others} speech={speech} play={play} positions={positions} space={space} leader={leader} />
       <PaperThrows players={others} positions={positions} leader={leader} play={play} paused={paused} space={space} />
     </Canvas>
