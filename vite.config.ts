@@ -5,6 +5,7 @@ import tailwindcss from '@tailwindcss/vite'
 import { createChatLog } from './server/chatLog.ts'
 import { createCheersHandler } from './server/cheers.ts'
 import { createCrabRankingHandler } from './server/crabRanking.ts'
+import { createEaselStore } from './server/easelStore.ts'
 import { createQuizzesHandler } from './server/quizzes.ts'
 import { attachRealtime, isLocalOrigin } from './server/realtime.ts'
 import { createRelayHandler } from './server/relay.ts'
@@ -15,13 +16,14 @@ function realtimePlugin(): Plugin {
   const attach = (server: PreviewServer | ViteDevServer) => {
     if (!server.httpServer) return
     const chatLog = createChatLog('.data/chats.db')
-    attachRealtime(server.httpServer as Server, { ...options, chatLog })
+    const easelStore = createEaselStore('.data/easel.db')
+    attachRealtime(server.httpServer as Server, { ...options, chatLog, easelStore })
     const cheers = createCheersHandler({ databasePath: '.data/cheers.db', isOriginAllowed: isLocalOrigin })
     const quizzes = createQuizzesHandler({ databasePath: '.data/quizzes.db', isOriginAllowed: isLocalOrigin })
     const relay = createRelayHandler({ databasePath: '.data/relay.db', isOriginAllowed: isLocalOrigin })
     const crabRanking = createCrabRankingHandler({ databasePath: '.data/crabgame.db', isOriginAllowed: isLocalOrigin })
     server.middlewares.use((request, response, next) => {
-      if (!cheers.handle(request, response) && !quizzes.handle(request, response) && !relay.handle(request, response) && !crabRanking.handle(request, response)) next()
+      if (!cheers.handle(request, response) && !quizzes.handle(request, response) && !relay.handle(request, response) && !crabRanking.handle(request, response) && !easelStore.handle(request, response)) next()
     })
     server.httpServer.once('close', () => {
       cheers.close()
@@ -29,6 +31,7 @@ function realtimePlugin(): Plugin {
       relay.close()
       crabRanking.close()
       chatLog.close()
+      easelStore.close()
     })
   }
   return {

@@ -1,5 +1,6 @@
 import { createServer } from 'node:http'
 import { createChatLog } from './chatLog.ts'
+import { createEaselStore } from './easelStore.ts'
 import { createCheersHandler } from './cheers.ts'
 import { createHarudleProxy } from './harudleProxy.ts'
 import { createCrabRankingHandler } from './crabRanking.ts'
@@ -48,13 +49,14 @@ const crabRanking = createCrabRankingHandler({
 })
 
 const chatLog = createChatLog(process.env.CHATS_DB_PATH ?? '.data/chats.db')
+const easelStore = createEaselStore(process.env.EASEL_DB_PATH ?? '.data/easel.db')
 
 const proxyHarudle = createHarudleProxy({ trustProxy: process.env.TRUST_PROXY === '1' })
 // SITE_DIR가 있으면 웹사이트도 이 서버가 함께 내준다.
 const serveSite = process.env.SITE_DIR ? createStaticSite(process.env.SITE_DIR) : null
 
 const server = createServer((request, response) => {
-  if (cheers.handle(request, response) || quizzes.handle(request, response) || relay.handle(request, response) || crabRanking.handle(request, response)) return
+  if (cheers.handle(request, response) || quizzes.handle(request, response) || relay.handle(request, response) || crabRanking.handle(request, response) || easelStore.handle(request, response)) return
   if (request.url === '/health') {
     response.writeHead(200, { 'Content-Type': 'application/json' })
     response.end(JSON.stringify({ ok: true, players: realtime.playerCount() }))
@@ -75,6 +77,7 @@ const realtime = attachRealtime(server, {
   maxPlayers,
   isOriginAllowed,
   chatLog,
+  easelStore,
 })
 
 // 공간 ID와 키를 모두 넣은 서버에서만 메타모아로 보낸다.
@@ -106,6 +109,7 @@ const shutdown = () => {
     relay.close()
     crabRanking.close()
     chatLog.close()
+    easelStore.close()
     process.exit(0)
   })
   server.closeIdleConnections()

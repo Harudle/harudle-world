@@ -2,6 +2,7 @@ import type { Server } from 'node:http'
 import { WebSocketServer, type WebSocket } from 'ws'
 import type { ChatLog } from './chatLog.ts'
 import { createEasel } from './easel.ts'
+import type { EaselStore } from './easelStore.ts'
 import { charLength, cleanText, LINK_PATTERN } from './cheers.ts'
 import { sanitizeAvatar, type AvatarConfig } from '../src/data/avatar.ts'
 import { isEmote } from '../src/data/emotes.ts'
@@ -54,6 +55,8 @@ export type RealtimeOptions = {
   isOriginAllowed: (origin: string | undefined) => boolean
   /** 있으면 채팅을 저장하고 들어온 사람에게 최근 대화를 보낸다. */
   chatLog?: ChatLog
+  /** 있으면 이젤 그림을 저장해 서버가 다시 켜져도 남긴다. */
+  easelStore?: EaselStore
 }
 
 type Player = {
@@ -120,7 +123,7 @@ function isBrowserAgent(agent: string | undefined) {
  * 값은 모두 서버에서 검증해 허용된 항목과 전시관 범위 안으로 맞춘다.
  * 채팅은 같은 방에 전달하고 chatLog에 기록해, 나중에 들어온 사람도 최근 대화를 볼 수 있다.
  */
-export function attachRealtime(server: Server, { path, maxPlayers, isOriginAllowed, chatLog }: RealtimeOptions) {
+export function attachRealtime(server: Server, { path, maxPlayers, isOriginAllowed, chatLog, easelStore }: RealtimeOptions) {
   const sockets = new WebSocketServer({ noServer: true, maxPayload: MAX_PAYLOAD_BYTES })
   const players = new Map<WebSocket, Player>()
   let nextId = 1
@@ -137,7 +140,7 @@ export function attachRealtime(server: Server, { path, maxPlayers, isOriginAllow
     for (const member of players.values()) {
       if (member.room === room && member.id !== exceptId) send(member.socket, payload)
     }
-  })
+  }, easelStore)
   const sendEasel = (player: Player) => {
     for (const payload of easel.snapshotFor(player.room)) send(player.socket, payload)
   }

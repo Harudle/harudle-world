@@ -28,6 +28,7 @@ ENV QUIZZES_DB_PATH=/data/quizzes.db
 ENV RELAY_DB_PATH=/data/relay.db
 ENV CHATS_DB_PATH=/data/chats.db
 ENV CRAB_GAME_DB_PATH=/data/crabgame.db
+ENV EASEL_DB_PATH=/data/easel.db
 EXPOSE 8787
 VOLUME /data
 

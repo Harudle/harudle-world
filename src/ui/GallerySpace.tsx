@@ -27,6 +27,7 @@ import { useDoorPrompt } from './DoorPrompt'
 import { CheerBoardModal } from './CheerBoardModal'
 import { EaselCanvasModal } from './EaselCanvasModal'
 import { EaselHud } from './EaselHud'
+import { SketchbookModal } from './SketchbookModal'
 import { GalleryHud } from './GalleryHud'
 import { HarudlePhoneModal } from './HarudlePhoneModal'
 import { PaintingGame } from './PaintingGame'
@@ -61,6 +62,7 @@ export function GallerySpace({ onExit }: { onExit: () => void }) {
   const [easelColor, setEaselColor] = useState(1)
   const [easelSize, setEaselSize] = useState(1)
   const [easelOpen, setEaselOpen] = useState(false)
+  const [sketchbookOpen, setSketchbookOpen] = useState(false)
   const droppingEasel = useRef(false)
 
   // 꾸미기를 마친 뒤에 입장해야 다른 방문자에게 완성된 모습으로 보인다.
@@ -135,7 +137,7 @@ export function GallerySpace({ onExit }: { onExit: () => void }) {
     return () => window.removeEventListener('keydown', handleKey, { capture: true })
   }, [canPickWithSpace, pickEaselBrush])
   const clearEasel = () => {
-    if (window.confirm('다 같이 그린 그림을 모두 지우고 새 종이로 바꿀까요?')) sendEasel({ t: 'easel-clear' })
+    if (window.confirm('다 같이 그린 그림을 스케치북에 넘기고 새 종이로 바꿀까요?')) sendEasel({ t: 'easel-clear' })
   }
 
   const zoneIndex = exhibition.zones.findIndex((zone) => zone.authorId === room)
@@ -254,7 +256,7 @@ export function GallerySpace({ onExit }: { onExit: () => void }) {
           showWaitingFrames={status !== 'ready'}
           overview={overview}
           jump={jump}
-          paused={Boolean(selected) || customizing || cheersOpen || boothOpen || phoneOpen || easelOpen || doorPromptOpen || paintingStage !== 'idle'}
+          paused={Boolean(selected) || customizing || cheersOpen || boothOpen || phoneOpen || easelOpen || sketchbookOpen || doorPromptOpen || paintingStage !== 'idle'}
           onSelect={select}
           onDoor={requestDoor}
           joystick={joystick}
@@ -321,8 +323,10 @@ export function GallerySpace({ onExit }: { onExit: () => void }) {
           onPick={pickEaselBrush}
           onOpenCanvas={openEaselCanvas}
           onDrop={dropEaselBrush}
+          onOpenSketchbook={() => setSketchbookOpen(true)}
         />
       )}
+      <SketchbookModal open={sketchbookOpen} onClose={() => setSketchbookOpen(false)} />
       <EaselCanvasModal
         open={easelOpen && holdingEaselBrush}
         art={easelArt}
